@@ -16,6 +16,22 @@ namespace KWin
 {
 class RuleSettings;
 
+class KWinRulesDBusAdaptor : public QDBusAbstractAdaptor
+{
+    Q_OBJECT
+    Q_CLASSINFO("D-Bus Interface", "org.kde.KWin.KCMKWinRules")
+
+public:
+    explicit KWinRulesDBusAdaptor(QObject *parent)
+        : QDBusAbstractAdaptor(parent){};
+
+signals:
+    void argumentsUpdated(const QStringList &arguments);
+
+public slots:
+    void updateArguments(const QStringList &arguments);
+};
+
 class KCMKWinRules : public KQuickAddons::ConfigModule
 {
     Q_OBJECT
@@ -47,10 +63,10 @@ signals:
 
 private slots:
     void updateNeedsSave();
+    void parseArguments(const QStringList &args);
 
 private:
     int editIndex() const;
-    void parseArguments(const QStringList &args);
     void createRuleFromProperties();
 
     QModelIndex findRuleWithProperties(const QVariantMap &info, bool wholeApp) const;
@@ -62,6 +78,7 @@ private:
 
     QPersistentModelIndex m_editIndex;
 
+    KWinRulesDBusAdaptor *m_dbusAdaptor;
     bool m_alreadyLoaded = false;
     QVariantMap m_winProperties;
     bool m_wholeApp = false;
