@@ -170,8 +170,8 @@ public:
 
     QVector<Property*> properties();
     void commit();
-    void commitPending();
-    void rollbackPending();
+    virtual void commitPending();
+    virtual void rollbackPending();
 
     bool needsCommit() const;
     virtual bool needsModeset() const = 0;

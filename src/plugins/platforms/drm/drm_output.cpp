@@ -42,16 +42,16 @@ DrmOutput::DrmOutput(DrmBackend *backend, DrmGpu *gpu, DrmPipeline *pipeline)
     , m_renderLoop(new RenderLoop(this))
 {
     m_pipeline->setUserData(this);
-    auto conn = m_pipeline->connector();
+    auto conn = m_pipeline->connectors()[0];
     m_renderLoop->setRefreshRate(conn->currentMode().refreshRate);
     setSubPixelInternal(conn->subpixel());
     setInternal(conn->isInternal());
     setCapabilityInternal(DrmOutput::Capability::Dpms);
-    if (conn->hasOverscan()) {
+    if (m_pipeline->hasOverscan()) {
         setCapabilityInternal(Capability::Overscan);
         setOverscanInternal(conn->overscan());
     }
-    if (conn->vrrCapable()) {
+    if (m_pipeline->vrrCapable()) {
         setCapabilityInternal(Capability::Vrr);
         setVrrPolicy(RenderLoop::VrrPolicy::Automatic);
     }
@@ -184,17 +184,15 @@ bool DrmOutput::moveCursor()
 
 void DrmOutput::initOutputDevice()
 {
-    auto conn = m_pipeline->connector();
-    auto modelist = conn->modes();
-
+    auto modelist = m_pipeline->modeList();
     QVector<Mode> modes;
     modes.reserve(modelist.count());
     for (int i = 0; i < modelist.count(); ++i) {
         Mode mode;
-        if (i == conn->currentModeIndex()) {
+        if (i == m_pipeline->modeIndex()) {
             mode.flags |= ModeFlag::Current;
         }
-        if (modelist[i].mode.type & DRM_MODE_TYPE_PREFERRED) {
+        if (modelist[i].preferred) {
             mode.flags |= ModeFlag::Preferred;
         }
 
@@ -204,6 +202,7 @@ void DrmOutput::initOutputDevice()
         modes << mode;
     }
 
+    auto conn = m_pipeline->connectors()[0];
     setName(conn->connectorName());
     initialize(conn->modelName(), conn->edid()->manufacturerString(),
                conn->edid()->eisaId(), conn->edid()->serialNumber(),
@@ -313,11 +312,11 @@ void DrmOutput::updateTransform(Transform transform)
 
 void DrmOutput::updateMode(uint32_t width, uint32_t height, uint32_t refreshRate)
 {
-    auto conn = m_pipeline->connector();
-    if (conn->currentMode().size == QSize(width, height) && conn->currentMode().refreshRate == refreshRate) {
+    auto mode = m_pipeline->currentMode();
+    if (mode.size == QSize(width, height) && mode.refreshRate == refreshRate) {
         return;
     }
-    auto modelist = conn->modes();
+    auto modelist = m_pipeline->modeList();
     for (int i = 0; i < modelist.size(); i++) {
         if (modelist[i].size == QSize(width, height) && modelist[i].refreshRate == refreshRate) {
             updateMode(i);
@@ -331,7 +330,7 @@ void DrmOutput::updateMode(uint32_t width, uint32_t height, uint32_t refreshRate
 void DrmOutput::updateMode(int modeIndex)
 {
     m_pipeline->modeset(modeIndex);
-    auto mode = m_pipeline->connector()->currentMode();
+    auto mode = m_pipeline->currentMode();
     AbstractWaylandOutput::setCurrentModeInternal(mode.size, mode.refreshRate);
     m_renderLoop->setRefreshRate(mode.refreshRate);
 }
@@ -363,7 +362,7 @@ bool DrmOutput::present(const QSharedPointer<DrmBuffer> &buffer, QRegion damaged
 
 int DrmOutput::gammaRampSize() const
 {
-    return m_pipeline->crtc()->gammaRampSize();
+    return m_pipeline->crtcs().first()->gammaRampSize();
 }
 
 bool DrmOutput::setGammaRamp(const GammaRamp &gamma)

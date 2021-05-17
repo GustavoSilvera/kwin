@@ -345,7 +345,7 @@ void DrmBackend::updateOutputs()
         }
     }
 
-    std::sort(m_outputs.begin(), m_outputs.end(), [] (DrmOutput *a, DrmOutput *b) { return a->pipeline()->connector()->id() < b->pipeline()->connector()->id(); });
+    std::sort(m_outputs.begin(), m_outputs.end(), [] (DrmOutput *a, DrmOutput *b) { return a->pipeline()->connectors().first()->id() < b->pipeline()->connectors().first()->id(); });
     if (oldOutputs != m_outputs) {
         readOutputsConfiguration();
     }

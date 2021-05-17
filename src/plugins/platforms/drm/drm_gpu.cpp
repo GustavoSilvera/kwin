@@ -199,14 +199,17 @@ bool DrmGpu::updateOutputs()
     for (const auto &connector : qAsConst(removedConnectors)) {
         m_connectors.removeOne(connector);
         if (auto output = findOutput(connector->id())) {
-            unusedCrtcs << output->pipeline()->crtc();
+            unusedCrtcs << output->pipeline()->crtcs();
             removeOutput(output);
         }
     }
     for (const auto &crtc : qAsConst(removedCrtcs)) {
-        auto it = std::find_if(m_outputs.constBegin(), m_outputs.constEnd(), [crtc](auto output){return output->pipeline()->crtc() == crtc;});
+        auto it = std::find_if(m_outputs.constBegin(), m_outputs.constEnd(), [crtc](auto output){return output->pipeline()->crtcs().contains(crtc);});
         if (it != m_outputs.constEnd()) {
-            unusedConnectors << (*it)->pipeline()->connector();
+            unusedConnectors << (*it)->pipeline()->connectors();
+            auto crtcs = (*it)->pipeline()->crtcs();
+            crtcs.removeOne(crtc);
+            unusedCrtcs << crtcs;
             removeOutput(*it);
         }
         m_crtcs.removeOne(crtc);
@@ -216,6 +219,21 @@ bool DrmGpu::updateOutputs()
         // before testing output configurations update all the plane properties as they might have changed
         for (const auto &plane : qAsConst(m_planes)) {
             plane->updateProperties();
+        }
+
+        // ensure that outputs with incomplete tiling can get new tiles added
+        // for this atm we can only remove the DrmOutput and create a new one with the added tile(s)
+        for (const auto &connector : qAsConst(unusedConnectors)) {
+            if (connector->isTiled() && !m_useEglStreams) {
+                const auto outputs = m_outputs;
+                for (const auto &output : outputs) {
+                    if (output->pipeline()->tilingGroup() == connector->tilingInfo().group_id) {
+                        unusedConnectors << output->pipeline()->connectors();
+                        unusedCrtcs << output->pipeline()->crtcs();
+                        removeOutput(output);
+                    }
+                }
+            }
         }
 
         QVector<DrmOutput*> config = findWorkingCombination({}, unusedConnectors, unusedCrtcs, m_unusedPlanes);
@@ -243,11 +261,15 @@ bool DrmGpu::updateOutputs()
             if (!output->initCursor(m_cursorSize)) {
                 m_backend->setSoftwareCursorForced(true);
             }
-            unusedConnectors.removeOne(output->pipeline()->connector());
-            unusedCrtcs.removeOne(output->pipeline()->crtc());
-            m_connectors << output->pipeline()->connector();
-            m_crtcs << output->pipeline()->crtc();
-            m_unusedPlanes.removeOne(output->pipeline()->primaryPlane());
+            for (int i = 0; i < output->pipeline()->connectors().count(); i++) {
+                unusedConnectors.removeOne(output->pipeline()->connectors()[i]);
+                unusedCrtcs.removeOne(output->pipeline()->crtcs()[i]);
+                if (output->pipeline()->primaryPlanes().count()) {
+                    m_unusedPlanes.removeOne(output->pipeline()->primaryPlanes()[i]);
+                }
+            }
+            m_connectors << output->pipeline()->connectors();
+            m_crtcs << output->pipeline()->crtcs();
             m_pipelines << output->pipeline();
             Q_EMIT outputAdded(output);
         }
@@ -265,7 +287,12 @@ QVector<DrmOutput*> DrmGpu::findWorkingCombination(QVector<DrmOutput*> outputs, 
     const auto lists = constructAllCombinations(connectors, crtcs, planes);
     for (auto it = lists.constBegin(); it < lists.constEnd(); it++) {
         for (const auto &pipeline : qAsConst(*it)) {
-            auto outputIt = std::find_if(outputs.constBegin(), outputs.constEnd(), [pipeline](auto output){return output->pipeline()->connector() == pipeline->connector();});
+            // look if there's already an output with the connector(s)
+            auto outputIt = std::find_if(outputs.constBegin(), outputs.constEnd(), [pipeline](auto output){
+                const auto &conns = pipeline->connectors();
+                return output->pipeline()->connectors().count() == pipeline->connectors().count()
+                    && std::all_of(conns.constBegin(), conns.constEnd(), [output](const auto &conn){return output->pipeline()->connectors().contains(conn);});
+            });
             if (outputIt == outputs.constEnd()) {
                 DrmOutput *output = new DrmOutput(m_backend, this, pipeline);
                 Q_EMIT outputEnabled(output);// create render resources for the test
@@ -311,8 +338,20 @@ QVector<QVector<DrmPipeline*>> DrmGpu::constructAllCombinations(QVector<DrmConne
         planesLeft.removeOne(primaryPlane);
         const auto otherPipelines = constructAllCombinations(connectors, crtcsLeft, planesLeft);
         for (auto list : otherPipelines) {
-            // prepend instead of append, to keep the order the same as the old algorithm
-            list.prepend(new DrmPipeline(this, connector, crtc, primaryPlane));
+            bool isTiled = false;
+            if (connector->isTiled() && !m_useEglStreams) {
+                for (const auto &pipeline : qAsConst(list)) {
+                    if (pipeline->tilingGroup() == connector->tilingInfo().group_id) {
+                        pipeline->addOutput(connector, crtc, primaryPlane);
+                        isTiled = true;
+                        break;
+                    }
+                }
+            }
+            if (!isTiled) {
+                // prepend instead of append, to keep the order the same as the old algorithm
+                list.prepend(new DrmPipeline(this, connector, crtc, primaryPlane));
+            }
             ret << list;
         }
         if (otherPipelines.isEmpty()) {
@@ -337,14 +376,21 @@ QVector<QVector<DrmPipeline*>> DrmGpu::constructAllCombinations(QVector<DrmConne
     }
     // sort by relevance
     std::sort(ret.begin(), ret.end(), [](const QVector<DrmPipeline*> &combination0, const QVector<DrmPipeline*> &combination1) {
+        // favor combinations where tiled displays are complete
+        auto isComplete = [](DrmPipeline *pipeline){return pipeline->isComplete();};
+        int count0 = std::count_if(combination0.begin(), combination0.end(), isComplete);
+        int count1 = std::count_if(combination1.begin(), combination1.end(), isComplete);
+        if (count0 > count1) {
+            return true;
+        }
         // favor combinations with the most working outputs
         if (combination0.count() > combination1.count()) {
             return true;
         }
         // favor combinations that are already set by the driver (or the last drm master)
         auto isConnected = [](DrmPipeline *pipeline){return pipeline->isConnected();};
-        int count0 = std::count_if(combination0.begin(), combination0.end(), isConnected);
-        int count1 = std::count_if(combination1.begin(), combination1.end(), isConnected);
+        count0 = std::count_if(combination0.begin(), combination0.end(), isConnected);
+        count1 = std::count_if(combination1.begin(), combination1.end(), isConnected);
         return count0 > count1;
     });
     return ret;
@@ -358,7 +404,8 @@ DrmPipeline *checkCombination()
 DrmOutput *DrmGpu::findOutput(quint32 connector)
 {
     auto it = std::find_if(m_outputs.constBegin(), m_outputs.constEnd(), [connector] (DrmOutput *o) {
-        return o->m_pipeline->connector()->id() == connector;
+        const auto &cons = o->pipeline()->connectors();
+        return std::find_if(cons.constBegin(), cons.constEnd(), [connector](const auto &c){return c->id() == connector;}) != cons.constEnd();
     });
     if (it != m_outputs.constEnd()) {
         return *it;
@@ -488,10 +535,10 @@ void DrmGpu::removeOutput(DrmOutput *output)
     Q_EMIT outputRemoved(output);
     auto pipeline = output->m_pipeline;
     delete output;
-    m_connectors.removeOne(pipeline->connector());
-    if (pipeline->primaryPlane()) {
-        m_unusedPlanes << pipeline->primaryPlane();
+    for (const auto &con : pipeline->connectors()) {
+        m_connectors.removeOne(con);
     }
+    m_unusedPlanes << pipeline->primaryPlanes();
     m_pipelines.removeOne(pipeline);
     delete pipeline;
 }

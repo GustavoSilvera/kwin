@@ -40,6 +40,7 @@ public:
         Underscan = 6,
         Underscan_vborder = 7,
         Underscan_hborder = 8,
+        Tile = 9,
         Count
     };
 
@@ -83,7 +84,7 @@ public:
         uint32_t refreshRate;
     };
     const Mode &currentMode() const;
-    int currentModeIndex() const;
+    int modeIndex() const;
     const QVector<Mode> &modes();
     void setModeIndex(int index);
     void findCurrentMode(drmModeModeInfo currentMode);
@@ -98,13 +99,35 @@ public:
 
     bool needsModeset() const override;
 
+    struct TilingInfo {
+        int group_id = -1;
+        int flags = 0;
+        int num_tiles_x = 1;
+        int num_tiles_y = 1;
+        int loc_x = 0;
+        int loc_y = 0;
+        int tile_width = 1;
+        int tile_height = 1;
+    };
+    const TilingInfo &tilingInfo() const;
+    bool isTiled() const;
+
+    QPoint tilePos() const;
+    // includes all other tiles
+    QSize totalModeSize(int modeIndex) const;
+
+    void commitPending() override;
+    void rollbackPending() override;
+
 private:
     DrmScopedPointer<drmModeConnector> m_conn;
     QVector<uint32_t> m_encoders;
     Edid m_edid;
     QSize m_physicalSize = QSize(-1, -1);
     QVector<Mode> m_modes;
+    int m_pendingModeIndex = 0;
     int m_modeIndex = 0;
+    TilingInfo m_tilingInfo;
 };
 
 }

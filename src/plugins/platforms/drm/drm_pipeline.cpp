@@ -35,18 +35,24 @@ namespace KWin
 DrmPipeline::DrmPipeline(DrmGpu *gpu, DrmConnector *conn, DrmCrtc *crtc, DrmPlane *primaryPlane)
     : m_pageflipUserData(nullptr)
     , m_gpu(gpu)
-    , m_connector(conn)
-    , m_crtc(crtc)
-    , m_primaryPlane(primaryPlane)
 {
-    m_allObjects << m_connector << m_crtc;
-    if (m_primaryPlane) {
-        m_allObjects << m_primaryPlane;
-    }
+    addOutput(conn, crtc, primaryPlane);
 }
 
 DrmPipeline::~DrmPipeline()
 {
+}
+
+void DrmPipeline::addOutput(DrmConnector *conn, DrmCrtc *crtc, DrmPlane *primaryPlane)
+{
+    Q_ASSERT_X(m_allObjects.isEmpty() || (m_gpu->atomicModeSetting() && !m_gpu->useEglStreams()), "DrmPipeline::addOutput", "Tiled displays require gbm and atomic modesetting");
+    m_connectors << conn;
+    m_crtcs << crtc;
+    m_allObjects << conn << crtc;
+    if (primaryPlane) {
+        m_primaryPlanes << primaryPlane;
+        m_allObjects << primaryPlane;
+    }
 }
 
 void DrmPipeline::setup()
@@ -54,15 +60,17 @@ void DrmPipeline::setup()
     if (!m_gpu->atomicModeSetting()) {
         return;
     }
-    m_connector->findCurrentMode(m_crtc->queryCurrentMode());
-    m_connector->setPending(DrmConnector::PropertyIndex::CrtcId, m_crtc->id());
-    m_crtc->setPending(DrmCrtc::PropertyIndex::Active, 1);
-    auto mode = m_connector->currentMode();
-    m_crtc->setPendingBlob(DrmCrtc::PropertyIndex::ModeId, &mode.mode, sizeof(drmModeModeInfo));
-    if (m_primaryPlane) {
-        m_primaryPlane->setPending(DrmPlane::PropertyIndex::CrtcId, m_crtc->id());
-        m_primaryPlane->set(QPoint(0, 0), sourceSize(), QPoint(0, 0), mode.size);
-        m_primaryPlane->setTransformation(DrmPlane::Transformation::Rotate0);
+    for (int i = 0; i < m_connectors.count(); i++) {
+        m_connectors[i]->findCurrentMode(m_crtcs[i]->queryCurrentMode());
+        m_connectors[i]->setPending(DrmConnector::PropertyIndex::CrtcId, m_crtcs[i]->id());
+        m_crtcs[i]->setPending(DrmCrtc::PropertyIndex::Active, 1);
+        auto mode = m_connectors[i]->currentMode();
+        m_crtcs[i]->setPendingBlob(DrmCrtc::PropertyIndex::ModeId, &mode.mode, sizeof(drmModeModeInfo));
+        if (m_primaryPlanes.count()) {
+            m_primaryPlanes[i]->setPending(DrmPlane::PropertyIndex::CrtcId, m_crtcs[i]->id());
+            m_primaryPlanes[i]->set(m_connectors[i]->tilePos(), mode.size, QPoint(0, 0), mode.size);
+            m_primaryPlanes[i]->setTransformation(DrmPlane::Transformation::Rotate0);
+        }
     }
     checkTestBuffer();
 }
@@ -192,7 +200,9 @@ bool DrmPipeline::doAtomicCommit(drmModeAtomicReq *req, uint32_t flags, bool tes
             for (const auto &obj : qAsConst(m_allObjects)) {
                 obj->commit();
             }
-            m_primaryPlane->setNext(m_primaryBuffer);
+            for (const auto &plane : qAsConst(m_primaryPlanes)) {
+                plane->setNext(m_primaryBuffer);
+            }
         }
     } else {
         if (m_oldTestBuffer) {
@@ -220,9 +230,11 @@ bool DrmPipeline::populateAtomicValues(drmModeAtomicReq *req, uint32_t &flags)
     }
     m_lastFlags = flags;
 
-    auto modeSize = m_connector->currentMode().size;
-    m_primaryPlane->set(QPoint(0, 0), m_primaryBuffer ? m_primaryBuffer->size() : modeSize, QPoint(0, 0), modeSize);
-    m_primaryPlane->setBuffer(m_active ? m_primaryBuffer.get() : nullptr);
+    for (int i = 0; i < m_connectors.count(); i++) {
+        auto modeSize = m_connectors[i]->currentMode().size;
+        m_primaryPlanes[i]->set(m_connectors[i]->tilePos(), rotated(modeSize), QPoint(0, 0), modeSize);
+        m_primaryPlanes[i]->setBuffer(m_active ? m_primaryBuffer.get() : nullptr);
+    }
     for (const auto &obj : qAsConst(m_allObjects)) {
         if (!obj->atomicPopulate(req)) {
             return false;
@@ -233,50 +245,54 @@ bool DrmPipeline::populateAtomicValues(drmModeAtomicReq *req, uint32_t &flags)
 
 bool DrmPipeline::presentLegacy()
 {
-    if ((!currentBuffer() || currentBuffer()->needsModeChange(m_primaryBuffer.get())) && !modeset(m_connector->currentModeIndex())) {
+    if ((!currentBuffer() || currentBuffer()->needsModeChange(m_primaryBuffer.get())) && !modeset(modeIndex())) {
         return false;
     }
     m_lastFlags = DRM_MODE_PAGE_FLIP_EVENT;
-    m_crtc->setNext(m_primaryBuffer);
-    if (drmModePageFlip(m_gpu->fd(), m_crtc->id(), m_primaryBuffer ? m_primaryBuffer->bufferId() : 0, DRM_MODE_PAGE_FLIP_EVENT, m_pageflipUserData) != 0) {
+    m_crtcs.first()->setNext(m_primaryBuffer);
+    if (drmModePageFlip(m_gpu->fd(), m_crtcs.first()->id(), m_primaryBuffer ? m_primaryBuffer->bufferId() : 0, DRM_MODE_PAGE_FLIP_EVENT, m_pageflipUserData) != 0) {
         qCWarning(KWIN_DRM) << "Page flip failed:" << strerror(errno) << m_primaryBuffer;
         return false;
     }
     return true;
 }
 
-bool DrmPipeline::modeset(int modeIndex)
+bool DrmPipeline::modeset(int wantedMode)
 {
-    int oldModeIndex = m_connector->currentModeIndex();
-    m_connector->setModeIndex(modeIndex);
-    auto mode = m_connector->currentMode().mode;
     if (m_gpu->atomicModeSetting()) {
-        m_crtc->setPendingBlob(DrmCrtc::PropertyIndex::ModeId, &mode, sizeof(drmModeModeInfo));
-        if (m_connector->hasOverscan()) {
-            m_connector->setOverscan(m_connector->overscan(), m_connector->currentMode().size);
-        }
+        auto setValues = [this, wantedMode](){
+            for (int i = 0; i < m_connectors.count(); i++) {
+                auto &conn = m_connectors[i];
+                conn->setModeIndex(wantedMode);
+                auto mode = conn->currentMode();
+                m_crtcs[i]->setPendingBlob(DrmCrtc::PropertyIndex::ModeId, &mode.mode, sizeof(drmModeModeInfo));
+                if (conn->hasOverscan()) {
+                    conn->setOverscan(conn->overscan(), mode.size);
+                }
+            }
+        };
+        setValues();
         bool works = test();
         // hardware rotation could fail in some modes, try again with soft rotation if possible
         if (!works
             && transformation() != DrmPlane::Transformations(DrmPlane::Transformation::Rotate0)
             && setPendingTransformation(DrmPlane::Transformation::Rotate0)) {
             // values are reset on the failing test, set them again
-            m_crtc->setPendingBlob(DrmCrtc::PropertyIndex::ModeId, &mode, sizeof(drmModeModeInfo));
-            if (m_connector->hasOverscan()) {
-                m_connector->setOverscan(m_connector->overscan(), m_connector->currentMode().size);
-            }
+            setValues();
             works = test();
         }
         if (!works) {
             qCDebug(KWIN_DRM) << "Modeset failed!" << strerror(errno);
-            m_connector->setModeIndex(oldModeIndex);
             return false;
         }
     } else {
-        uint32_t connId = m_connector->id();
-        if (!checkTestBuffer() || drmModeSetCrtc(m_gpu->fd(), m_crtc->id(), m_primaryBuffer->bufferId(), 0, 0, &connId, 1, &mode) != 0) {
+        int oldModeIndex = modeIndex();
+        m_connectors.first()->setModeIndex(wantedMode);
+        auto mode = m_connectors.first()->currentMode().mode;
+        uint32_t connId = m_connectors.first()->id();
+        if (!checkTestBuffer() || drmModeSetCrtc(m_gpu->fd(), m_crtcs.first()->id(), m_primaryBuffer->bufferId(), 0, 0, &connId, 1, &mode) != 0) {
             qCWarning(KWIN_DRM) << "Modeset failed!" << strerror(errno);
-            m_connector->setModeIndex(oldModeIndex);
+            m_connectors.first()->setModeIndex(oldModeIndex);
             m_primaryBuffer = m_oldTestBuffer;
             return false;
         }
@@ -334,9 +350,11 @@ bool DrmPipeline::setCursor(const QSharedPointer<DrmDumbBuffer> &buffer)
         return true;
     }
     const QSize &s = buffer ? buffer->size() : QSize(64, 64);
-    if (drmModeSetCursor(m_gpu->fd(), m_crtc->id(), buffer ? buffer->handle() : 0, s.width(), s.height()) != 0) {
-        qCWarning(KWIN_DRM) << "Could not set cursor:" << strerror(errno);
-        return false;
+    for (const auto &crtc : qAsConst(m_crtcs)) {
+        if (drmModeSetCursor(m_gpu->fd(), crtc->id(), buffer ? buffer->handle() : 0, s.width(), s.height()) != 0) {
+            qCWarning(KWIN_DRM) << "Could not set cursor:" << strerror(errno);
+            return false;
+        }
     }
     m_cursor.buffer = buffer;
     m_cursor.dirty = false;
@@ -348,9 +366,11 @@ bool DrmPipeline::moveCursor(QPoint pos)
     if (!m_cursor.dirty && m_cursor.pos == pos) {
         return true;
     }
-    if (drmModeMoveCursor(m_gpu->fd(), m_crtc->id(), pos.x(), pos.y()) != 0) {
-        m_cursor.pos = pos;
-        return false;
+    for (const auto &crtc : qAsConst(m_crtcs)) {
+        if (drmModeMoveCursor(m_gpu->fd(), crtc->id(), pos.x(), pos.y()) != 0) {
+            m_cursor.pos = pos;
+            return false;
+        }
     }
     m_cursor.dirty = false;
     return true;
@@ -360,19 +380,23 @@ bool DrmPipeline::setActive(bool active)
 {
     // disable the cursor before the primary plane to circumvent a crash in amdgpu
     if (m_active && !active) {
-        if (drmModeSetCursor(m_gpu->fd(), m_crtc->id(), 0, 0, 0) != 0) {
-            qCWarning(KWIN_DRM) << "Could not set cursor:" << strerror(errno);
+        for (const auto &crtc : qAsConst(m_crtcs)) {
+            if (drmModeSetCursor(m_gpu->fd(), crtc->id(), 0, 0, 0) != 0) {
+                qCWarning(KWIN_DRM) << "Could not set cursor:" << strerror(errno);
+            }
         }
     }
     bool success = false;
-    auto mode = m_connector->currentMode().mode;
     bool oldActive = m_active;
     m_active = active;
     if (m_gpu->atomicModeSetting()) {
-        m_connector->setPending(DrmConnector::PropertyIndex::CrtcId, active ? m_crtc->id() : 0);
-        m_crtc->setPending(DrmCrtc::PropertyIndex::Active, active);
-        m_crtc->setPendingBlob(DrmCrtc::PropertyIndex::ModeId, active ? &mode : nullptr, sizeof(drmModeModeInfo));
-        m_primaryPlane->setPending(DrmPlane::PropertyIndex::CrtcId, active ? m_crtc->id() : 0);
+        for (int i = 0; i < m_connectors.count(); i++) {
+            auto mode = m_connectors[i]->currentMode().mode;
+            m_connectors[i]->setPending(DrmConnector::PropertyIndex::CrtcId, active ? m_crtcs[i]->id() : 0);
+            m_crtcs[i]->setPending(DrmCrtc::PropertyIndex::Active, active);
+            m_crtcs[i]->setPendingBlob(DrmCrtc::PropertyIndex::ModeId, active ? &mode : nullptr, sizeof(drmModeModeInfo));
+            m_primaryPlanes[i]->setPending(DrmPlane::PropertyIndex::CrtcId, active ? m_crtcs[i]->id() : 0);
+        }
         if (active) {
             success = test();
             if (!success) {
@@ -384,11 +408,11 @@ bool DrmPipeline::setActive(bool active)
             success = atomicCommit();
         }
     } else {
-        auto dpmsProp = m_connector->getProp(DrmConnector::PropertyIndex::Dpms);
+        auto dpmsProp = m_connectors.first()->getProp(DrmConnector::PropertyIndex::Dpms);
         if (!dpmsProp) {
             qCWarning(KWIN_DRM) << "Setting active failed: dpms property missing!";
         } else {
-            success = drmModeConnectorSetProperty(m_gpu->fd(), m_connector->id(), dpmsProp->propId(), active ? DRM_MODE_DPMS_ON : DRM_MODE_DPMS_OFF) == 0;
+            success = drmModeConnectorSetProperty(m_gpu->fd(), m_connectors.first()->id(), dpmsProp->propId(), active ? DRM_MODE_DPMS_ON : DRM_MODE_DPMS_OFF) == 0;
         }
     }
     if (!success) {
@@ -406,14 +430,20 @@ bool DrmPipeline::setGammaRamp(const GammaRamp &ramp)
 {
     // There are old Intel iGPUs that don't have full support for setting
     // the gamma ramp with AMS -> fall back to legacy without the property
-    if (m_gpu->atomicModeSetting() && m_crtc->getProp(DrmCrtc::PropertyIndex::Gamma_LUT)) {
+    if (m_gpu->atomicModeSetting() && m_crtcs.first()->getProp(DrmCrtc::PropertyIndex::Gamma_LUT)) {
         struct drm_color_lut *gamma = new drm_color_lut[ramp.size()];
         for (uint32_t i = 0; i < ramp.size(); i++) {
             gamma[i].red = ramp.red()[i];
             gamma[i].green = ramp.green()[i];
             gamma[i].blue = ramp.blue()[i];
         }
-        bool result = m_crtc->setPendingBlob(DrmCrtc::PropertyIndex::Gamma_LUT, gamma, ramp.size() * sizeof(drm_color_lut));
+        bool result = true;
+        for (const auto &crtc : qAsConst(m_crtcs)) {
+            result &= crtc->setPendingBlob(DrmCrtc::PropertyIndex::Gamma_LUT, gamma, ramp.size() * sizeof(drm_color_lut));
+            if (!result) {
+                break;
+            }
+        }
         delete[] gamma;
         if (!result) {
             qCWarning(KWIN_DRM) << "Could not create gamma LUT property blob" << strerror(errno);
@@ -427,9 +457,11 @@ bool DrmPipeline::setGammaRamp(const GammaRamp &ramp)
         uint16_t *red = const_cast<uint16_t*>(ramp.red());
         uint16_t *green = const_cast<uint16_t*>(ramp.green());
         uint16_t *blue = const_cast<uint16_t*>(ramp.blue());
-        if (drmModeCrtcSetGamma(m_gpu->fd(), m_crtc->id(), ramp.size(), red, green, blue) != 0) {
-            qCWarning(KWIN_DRM) << "setting gamma failed!" << strerror(errno);
-            return false;
+        for (const auto &crtc : qAsConst(m_crtcs)) {
+            if (drmModeCrtcSetGamma(m_gpu->fd(), crtc->id(), ramp.size(), red, green, blue) != 0) {
+                qCWarning(KWIN_DRM) << "setting gamma failed!" << strerror(errno);
+                return false;
+            }
         }
     }
     return true;
@@ -448,7 +480,17 @@ bool DrmPipeline::setPendingTransformation(const DrmPlane::Transformations &tran
     if (!m_gpu->atomicModeSetting()) {
         return false;
     }
-    if (!m_primaryPlane->setTransformation(transformation)) {
+    bool result = true;
+    for (const auto &plane : qAsConst(m_primaryPlanes)) {
+        result &= plane->setTransformation(transformation);
+        if (!result) {
+            break;
+        }
+    }
+    if (!result) {
+        for (const auto &obj : qAsConst(m_primaryPlanes)) {
+            obj->rollbackPending();
+        }
         return false;
     }
     return true;
@@ -456,43 +498,59 @@ bool DrmPipeline::setPendingTransformation(const DrmPlane::Transformations &tran
 
 bool DrmPipeline::setSyncMode(RenderLoopPrivate::SyncMode syncMode)
 {
-    auto vrrProp = m_crtc->getProp(DrmCrtc::PropertyIndex::VrrEnabled);
-    if (!vrrProp || !m_connector->vrrCapable()) {
+    if (!vrrCapable()) {
         return syncMode == RenderLoopPrivate::SyncMode::Fixed;
     }
     bool vrr = syncMode == RenderLoopPrivate::SyncMode::Adaptive;
-    if (vrrProp->pending() == vrr) {
-        return true;
-    }
     if (m_gpu->atomicModeSetting()) {
-        vrrProp->setPending(vrr);
-        return test();
+        bool success = true;
+        bool needsTest = false;
+        for (const auto &crtc : qAsConst(m_crtcs)) {
+            auto vrrProp = crtc->getProp(DrmCrtc::PropertyIndex::VrrEnabled);
+            if (!vrrProp) {
+                success = false;
+                break;
+            } else if (vrrProp->pending() != vrr) {
+                needsTest = true;
+                vrrProp->setPending(vrr);
+            }
+        }
+        return success && (!needsTest || test());
     } else {
-        return drmModeObjectSetProperty(m_gpu->fd(), m_crtc->id(), DRM_MODE_OBJECT_CRTC, vrrProp->propId(), vrr) == 0;
+        auto vrrProp = m_crtcs.first()->getProp(DrmCrtc::PropertyIndex::VrrEnabled);
+        return vrrProp && drmModeObjectSetProperty(m_gpu->fd(), m_crtcs.first()->id(), DRM_MODE_OBJECT_CRTC, vrrProp->propId(), vrr) == 0;
     }
 }
 
 bool DrmPipeline::setOverscan(uint32_t overscan)
 {
-    if (overscan > 100 || (overscan != 0 && !m_connector->hasOverscan())) {
+    if (overscan > 100 || m_connectors.count() > 1 || (overscan != 0 && !m_connectors.first()->hasOverscan())) {
         return false;
     }
-    m_connector->setOverscan(overscan, m_connector->currentMode().size);
+    m_connectors.first()->setOverscan(overscan, m_connectors.first()->currentMode().size);
     return test();
+}
+
+QSize DrmPipeline::rotated(const QSize &size) const
+{
+    if (transformation() & (DrmPlane::Transformation::Rotate90 | DrmPlane::Transformation::Rotate270)) {
+        return size.transposed();
+    }
+    return size;
 }
 
 QSize DrmPipeline::sourceSize() const
 {
-    auto mode = m_connector->currentMode();
+    auto size = m_connectors.first()->totalModeSize(modeIndex());
     if (transformation() & (DrmPlane::Transformation::Rotate90 | DrmPlane::Transformation::Rotate270)) {
-        return mode.size.transposed();
+        return size.transposed();
     }
-    return mode.size;
+    return size;
 }
 
 DrmPlane::Transformations DrmPipeline::transformation() const
 {
-    return m_primaryPlane ? m_primaryPlane->transformation() : DrmPlane::Transformation::Rotate0;
+    return m_primaryPlanes.count() ? m_primaryPlanes.first()->transformation() : DrmPlane::Transformation::Rotate0;
 }
 
 bool DrmPipeline::isActive() const
@@ -502,7 +560,7 @@ bool DrmPipeline::isActive() const
 
 bool DrmPipeline::isCursorVisible() const
 {
-    return m_cursor.buffer && QRect(m_cursor.pos, m_cursor.buffer->size()).intersects(QRect(QPoint(0, 0), m_connector->currentMode().size));
+    return m_cursor.buffer && QRect(m_cursor.pos, m_cursor.buffer->size()).intersects(QRect(QPoint(0, 0), m_connectors.first()->totalModeSize(modeIndex())));
 }
 
 QPoint DrmPipeline::cursorPos() const
@@ -510,31 +568,34 @@ QPoint DrmPipeline::cursorPos() const
     return m_cursor.pos;
 }
 
-DrmConnector *DrmPipeline::connector() const
+QVector<DrmConnector*> DrmPipeline::connectors() const
 {
-    return m_connector;
+    return m_connectors;
 }
 
-DrmCrtc *DrmPipeline::crtc() const
+QVector<DrmCrtc*> DrmPipeline::crtcs() const
 {
-    return m_crtc;
+    return m_crtcs;
 }
 
-DrmPlane *DrmPipeline::primaryPlane() const
+QVector<DrmPlane*> DrmPipeline::primaryPlanes() const
 {
-    return m_primaryPlane;
+    return m_primaryPlanes;
 }
 
 DrmBuffer *DrmPipeline::currentBuffer() const
 {
-    return m_primaryPlane ? m_primaryPlane->current().get() : m_crtc->current().get();
+    return m_primaryPlanes.count() ? m_primaryPlanes.first()->current().get() : m_crtcs.first()->current().get();
 }
 
 void DrmPipeline::pageFlipped()
 {
-    m_crtc->flipBuffer();
-    if (m_primaryPlane) {
-        m_primaryPlane->flipBuffer();
+    for (const auto &obj : qAsConst(m_allObjects)) {
+        if (auto crtc = dynamic_cast<DrmCrtc*>(obj)) {
+            crtc->flipBuffer();
+        } else if (auto plane = dynamic_cast<DrmPlane*>(obj)) {
+            plane->flipBuffer();
+        }
     }
 }
 
@@ -555,12 +616,92 @@ void DrmPipeline::updateProperties()
 
 bool DrmPipeline::isConnected() const
 {
-    if (m_primaryPlane) {
-        return m_connector->getProp(DrmConnector::PropertyIndex::CrtcId)->current() == m_crtc->id()
-            && m_primaryPlane->getProp(DrmPlane::PropertyIndex::CrtcId)->current() == m_crtc->id();
+    if (m_primaryPlanes.count()) {
+        for (int i = 0; i < m_connectors.count(); i++) {
+            if (m_connectors[i]->getProp(DrmConnector::PropertyIndex::CrtcId)->current() != m_crtcs[i]->id()
+                || m_primaryPlanes[i]->getProp(DrmPlane::PropertyIndex::CrtcId)->current() != m_crtcs[i]->id()) {
+                return false;
+            }
+        }
+        return true;
     } else {
         return false;
     }
+}
+
+bool DrmPipeline::isComplete() const
+{
+    if (m_connectors.first()->isTiled()) {
+        if (m_gpu->useEglStreams()) {
+            // not supported with eglstreams
+            return true;
+        }
+        int width = m_connectors.first()->tilingInfo().num_tiles_x;
+        int height = m_connectors.first()->tilingInfo().num_tiles_y;
+        for (int x = 0; x < width; x++) {
+            for (int y = 0; y < height; y++) {
+                // find connector that fills the current 1x1 tile
+                bool tileFound = false;
+                for (const auto &conn : qAsConst(m_connectors)) {
+                    const auto &info = conn->tilingInfo();
+                    if (x >= info.loc_x && x <= info.loc_x + info.tile_width
+                        && y >= info.loc_y && y <= info.loc_y + info.tile_height) {
+                        tileFound = true;
+                        break;
+                    }
+                }
+                if (!tileFound) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    } else {
+        return true;
+    }
+}
+
+int DrmPipeline::modeIndex() const
+{
+    return m_connectors.first()->modeIndex();
+}
+
+QVector<DrmPipeline::Mode> DrmPipeline::modeList() const
+{
+    QVector<Mode> modeList;
+    const auto modes = m_connectors.first()->modes();
+    for (int i = 0; i < modes.count(); i++) {
+        Mode m;
+        m.size = m_connectors.first()->totalModeSize(i);
+        m.refreshRate = modes[i].refreshRate;
+        m.preferred = modes[i].mode.type & DRM_MODE_TYPE_PREFERRED;
+        modeList << m;
+    }
+    return modeList;
+}
+
+DrmPipeline::Mode DrmPipeline::currentMode() const
+{
+    Mode m;
+    m.size = m_connectors.first()->totalModeSize(modeIndex());
+    m.refreshRate = m_connectors.first()->currentMode().refreshRate;
+    m.preferred = m_connectors.first()->currentMode().mode.type & DRM_MODE_TYPE_PREFERRED;
+    return m;
+}
+
+bool DrmPipeline::vrrCapable() const
+{
+    return std::all_of(m_connectors.constBegin(), m_connectors.constEnd(), [](const auto &conn){return conn->vrrCapable();});
+}
+
+bool DrmPipeline::hasOverscan() const
+{
+    return m_connectors.count() > 1 ? false : m_connectors.first()->hasOverscan();
+}
+
+int DrmPipeline::tilingGroup() const
+{
+    return m_connectors.first()->tilingInfo().group_id;
 }
 
 static void printProps(DrmObject *object)
@@ -594,14 +735,16 @@ void DrmPipeline::printDebugInfo() const
         }
     }
     qCWarning(KWIN_DRM) << "Drm objects:";
-    qCWarning(KWIN_DRM) << "connector" << m_connector->id();
-    auto list = m_connector->properties();
-    printProps(m_connector);
-    qCWarning(KWIN_DRM) << "crtc" << m_crtc->id();
-    printProps(m_crtc);
-    if (m_primaryPlane) {
-        qCWarning(KWIN_DRM) << "primary plane" << m_primaryPlane->id();
-        printProps(m_primaryPlane);
+    for (int i = 0; i < m_connectors.count(); i++) {
+        qCWarning(KWIN_DRM) << "connector" << m_connectors[i]->id();
+        auto list = m_connectors[i]->properties();
+        printProps(m_connectors[i]);
+        qCWarning(KWIN_DRM) << "crtc" << m_crtcs[i]->id();
+        printProps(m_crtcs[i]);
+        if (m_primaryPlanes[i]) {
+            qCWarning(KWIN_DRM) << "primary plane" << m_primaryPlanes[i]->id();
+            printProps(m_primaryPlanes[i]);
+        }
     }
 }
 

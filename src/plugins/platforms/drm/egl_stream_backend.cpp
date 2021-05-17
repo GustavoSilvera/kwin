@@ -311,8 +311,9 @@ bool EglStreamBackend::resetOutput(Output &o, DrmOutput *drmOutput)
     if (isPrimary()) {
         // dumb buffer used for modesetting
         o.buffer = QSharedPointer<DrmDumbBuffer>::create(m_gpu, sourceSize);
-        o.targetPlane = drmOutput->pipeline()->primaryPlane();
-        o.targetCrtc = o.targetPlane ? nullptr : drmOutput->pipeline()->crtc();
+        auto planes = drmOutput->pipeline()->primaryPlanes();
+        o.targetPlane = planes.count() ? planes.first() : nullptr;
+        o.targetCrtc = o.targetPlane ? nullptr : drmOutput->pipeline()->crtcs().first();
 
         EGLAttrib streamAttribs[] = {
             EGL_STREAM_FIFO_LENGTH_KHR, 0, // mailbox mode
@@ -480,7 +481,8 @@ PlatformSurfaceTexture *EglStreamBackend::createPlatformSurfaceTextureWayland(Su
 
 bool EglStreamBackend::isOutputCorrect(const Output &o) const
 {
-    if (o.targetCrtc != o.output->pipeline()->crtc() || o.targetPlane != o.output->pipeline()->primaryPlane()) {
+    auto plane = o.output->pipeline()->primaryPlanes().count() ? o.output->pipeline()->primaryPlanes().first() : nullptr;
+    if (o.targetCrtc != o.output->pipeline()->crtcs().first() || o.targetPlane != plane) {
         return false;
     }
     QSize surfaceSize = o.dumbSwapchain ? o.dumbSwapchain->size() : o.buffer->size();

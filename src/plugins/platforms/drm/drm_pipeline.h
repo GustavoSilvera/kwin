@@ -39,12 +39,18 @@ public:
      * Sets the necessary initial drm properties for the pipeline to work
      */
     void setup();
+    void addOutput(DrmConnector *conn, DrmCrtc *crtc, DrmPlane *primaryPlane);
 
     /**
      * checks if the connector, crtc and plane are already set to each other
      * always returns false in legacy mode
      */
     bool isConnected() const;
+
+    /**
+     * checks if all tiles of the display are included in this Pipeline
+     */
+    bool isComplete() const;
 
     /**
      * tests the pending commit first and commits it if the test passes
@@ -72,9 +78,9 @@ public:
     bool isCursorVisible() const;
     QPoint cursorPos() const;
 
-    DrmConnector *connector() const;
-    DrmCrtc *crtc() const;
-    DrmPlane *primaryPlane() const;
+    QVector<DrmConnector*> connectors() const;
+    QVector<DrmCrtc*> crtcs() const;
+    QVector<DrmPlane*> primaryPlanes() const;
 
     DrmBuffer *currentBuffer() const;
 
@@ -83,6 +89,19 @@ public:
     void setUserData(DrmOutput *data);
     QSize sourceSize() const;
     void updateProperties();
+
+    struct Mode {
+        QSize size;
+        uint32_t refreshRate;
+        bool preferred;
+    };
+    QVector<Mode> modeList() const;
+    Mode currentMode() const;
+    int modeIndex() const;
+    int tilingGroup() const;
+
+    bool vrrCapable() const;
+    bool hasOverscan() const;
 
     /**
      * tests whether or not the passed configuration would work
@@ -98,15 +117,16 @@ private:
     bool presentLegacy();
     bool test();
     bool checkTestBuffer();
+    QSize rotated(const QSize &size) const;
 
     bool setPendingTransformation(const DrmPlane::Transformations &transformation);
 
     DrmOutput *m_pageflipUserData = nullptr;
     DrmGpu *m_gpu = nullptr;
-    DrmConnector *m_connector = nullptr;
-    DrmCrtc *m_crtc = nullptr;
+    QVector<DrmConnector*> m_connectors;
+    QVector<DrmCrtc*> m_crtcs;
 
-    DrmPlane *m_primaryPlane = nullptr;
+    QVector<DrmPlane*> m_primaryPlanes;
     QSharedPointer<DrmBuffer> m_primaryBuffer;
     QSharedPointer<DrmBuffer> m_oldTestBuffer;
 
@@ -117,7 +137,6 @@ private:
         QSharedPointer<DrmDumbBuffer> buffer;
         bool dirty = true;// we don't know what the current state is
     } m_cursor;
-
     QVector<DrmObject*> m_allObjects;
 
     int m_lastFlags = 0;
