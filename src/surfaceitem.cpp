@@ -151,10 +151,6 @@ WindowQuadList SurfaceItem::buildQuads() const
     return quads;
 }
 
-SurfaceTextureProvider::~SurfaceTextureProvider()
-{
-}
-
 SurfacePixmap::SurfacePixmap(SurfaceTextureProvider *platformTexture, QObject *parent)
     : QObject(parent)
     , m_platformTexture(platformTexture)
