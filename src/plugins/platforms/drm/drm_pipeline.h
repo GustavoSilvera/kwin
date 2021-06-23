@@ -36,6 +36,11 @@ public:
     ~DrmPipeline();
 
     /**
+     * Sets the necessary initial drm properties for the pipeline to work
+     */
+    void setup();
+
+    /**
      * checks if the connector(s) and plane(s) are set to the CRTC(s)
      * always returns false in legacy mode
      */
@@ -78,6 +83,12 @@ public:
     void setUserData(DrmOutput *data);
     QSize sourceSize() const;
     void updateProperties();
+
+    /**
+     * tests whether or not the passed configuration would work
+     * always returns true in legacy mode!
+     */
+    static bool testPipelines(const QVector<DrmPipeline*> &pipelines);
 
 private:
     bool atomicCommit();
