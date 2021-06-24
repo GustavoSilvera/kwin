@@ -142,7 +142,9 @@ int GestureRecognizer::startSwipeGesture(uint fingerCount, const QPointF &startP
 void GestureRecognizer::updateSwipeGesture(const QSizeF &delta)
 {
     m_swipeUpdates << delta;
-    if (std::abs(delta.width()) < 1 && std::abs(delta.height()) < 1) {
+    const QSizeF combinedDelta = std::accumulate(m_swipeUpdates.constBegin(), m_swipeUpdates.constEnd(), QSizeF(0, 0));
+
+    if (std::abs(combinedDelta.width()) < 1 && std::abs(combinedDelta.height()) < 1) {
         // some (touch) devices report sub-pixel movement on screen edges
         // this often cancels gestures -> ignore these movements
         return;
@@ -161,7 +163,7 @@ void GestureRecognizer::updateSwipeGesture(const QSizeF &delta)
         // vertical
         direction = delta.height() < 0 ? SwipeGesture::Direction::Up : SwipeGesture::Direction::Down;
     }
-    const QSizeF combinedDelta = std::accumulate(m_swipeUpdates.constBegin(), m_swipeUpdates.constEnd(), QSizeF(0, 0));
+
     for (auto it = m_activeSwipeGestures.begin(); it != m_activeSwipeGestures.end();) {
         auto g = qobject_cast<SwipeGesture*>(*it);
         if (g->direction() == direction) {
