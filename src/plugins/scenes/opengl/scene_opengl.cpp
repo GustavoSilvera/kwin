@@ -1127,9 +1127,10 @@ void OpenGLWindow::performPaint(int mask, const QRegion &region, const WindowPai
             opacity = renderNode.opacity;
         }
 
-        texture->setFiltering(KrkTexture::Linear);
-        texture->setWrapMode(KrkTexture::ClampToEdge);
-        texture->bind();
+        GLTexture *nativeTexture = sceneTextureToGLTexture(texture);
+        nativeTexture->setFilter(texture->filtering() == KrkTexture::Linear ? GL_LINEAR : GL_NEAREST);
+        nativeTexture->setWrapMode(texture->wrapMode() == KrkTexture::Repeat ? GL_REPEAT : GL_CLAMP_TO_EDGE);
+        nativeTexture->bind();
 
         vbo->draw(region, primitiveType, renderNode.firstVertex,
                   renderNode.vertexCount, renderContext.hardwareClipping);
