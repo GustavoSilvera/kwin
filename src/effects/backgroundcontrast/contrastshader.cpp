@@ -215,13 +215,10 @@ void ContrastShader::init()
 
     )" << fragColor << "= vec4(final, finalAlpha);\n";
     } else {
-        stream2 << "    if (opacity >= 1.0) {\n";
-        stream2 << "        " << fragColor << " = tex * colorMatrix;\n";
-        stream2 << "    } else {\n";
-        stream2 << "        " << fragColor << " = tex * (opacity * colorMatrix + (1.0 - opacity) * mat4(1.0));\n";
-        stream2 << "    }\n";
+        stream2 << "    " << fragColor << " = tex * colorMatrix;\n";
     }
 
+    stream2 << "    " << fragColor << ".a *= opacity;";
 
     stream2 << "}\n";
     stream2.flush();
