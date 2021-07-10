@@ -35,6 +35,7 @@ class Item;
 class OverlayWindow;
 class PlatformSurfaceTexture;
 class RenderLoop;
+class Renderer;
 class Shadow;
 class ShadowItem;
 class SurfaceItem;
@@ -144,6 +145,7 @@ public:
         ImageFilterGood,
     };
     virtual OverlayWindow* overlayWindow() const = 0;
+    virtual Renderer *renderer() const = 0;
 
     virtual bool makeOpenGLContextCurrent();
     virtual void doneOpenGLContextCurrent();

@@ -38,6 +38,7 @@ public:
     Shadow *createShadow(Toplevel *toplevel) override;
     void screenGeometryChanged(const QSize &size) override;
     OverlayWindow *overlayWindow() const override;
+    Renderer *renderer() const override;
     bool makeOpenGLContextCurrent() override;
     void doneOpenGLContextCurrent() override;
     bool supportsSurfacelessContext() const override;

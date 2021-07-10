@@ -15,7 +15,7 @@
 namespace KWin
 {
 
-class EglMultiBackend : public QObject, public OpenGLBackend
+class EglMultiBackend : public OpenGLBackend
 {
     Q_OBJECT
 public:
@@ -36,8 +36,8 @@ public:
     QSharedPointer<GLTexture> textureForOutput(AbstractOutput *requestedOutput) const override;
 
     void screenGeometryChanged(const QSize &size) override;
-
     bool directScanoutAllowed(int screen) const override;
+    std::chrono::nanoseconds renderTime(AbstractOutput *output) override;
 
 public Q_SLOTS:
     void addGpu(DrmGpu *gpu);

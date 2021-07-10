@@ -179,6 +179,11 @@ QImage *SceneQPainter::qpainterRenderBuffer(int screenId) const
     return m_backend->bufferForScreen(screenId);
 }
 
+Renderer *SceneQPainter::renderer() const
+{
+    return m_backend.data();
+}
+
 //****************************************
 // SceneQPainter::Window
 //****************************************

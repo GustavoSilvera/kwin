@@ -19,7 +19,7 @@ namespace KWin
 
 class VirtualBackend;
 
-class VirtualQPainterBackend : public QObject, public QPainterBackend
+class VirtualQPainterBackend : public QPainterBackend
 {
     Q_OBJECT
 public:
@@ -30,6 +30,7 @@ public:
     bool needsFullRepaint(int screenId) const override;
     void beginFrame(int screenId) override;
     void endFrame(int screenId, int mask, const QRegion &damage) override;
+    std::chrono::nanoseconds renderTime(AbstractOutput *output) override;
 
 private:
     void createOutputs();

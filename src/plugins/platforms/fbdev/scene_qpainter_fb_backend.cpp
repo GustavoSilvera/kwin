@@ -21,8 +21,7 @@
 namespace KWin
 {
 FramebufferQPainterBackend::FramebufferQPainterBackend(FramebufferBackend *backend)
-    : QObject()
-    , QPainterBackend()
+    : QPainterBackend()
     , m_renderBuffer(backend->screenSize(), QImage::Format_RGB32)
     , m_backend(backend)
     , m_needsFullRepaint(true)
@@ -80,6 +79,7 @@ void FramebufferQPainterBackend::beginFrame(int screenId)
 {
     Q_UNUSED(screenId)
     m_needsFullRepaint = true;
+    m_profiler.begin();
 }
 
 void FramebufferQPainterBackend::endFrame(int screenId, int mask, const QRegion &damage)
@@ -98,6 +98,14 @@ void FramebufferQPainterBackend::endFrame(int screenId, int mask, const QRegion 
 
     QPainter p(&m_backBuffer);
     p.drawImage(QPoint(0, 0), m_backend->isBGR() ? m_renderBuffer.rgbSwapped() : m_renderBuffer);
+
+    m_profiler.end();
+}
+
+std::chrono::nanoseconds FramebufferQPainterBackend::renderTime(AbstractOutput *output)
+{
+    Q_UNUSED(output)
+    return m_profiler.result();
 }
 
 }

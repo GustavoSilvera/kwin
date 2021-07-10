@@ -231,6 +231,11 @@ OverlayWindow *SceneOpenGL::overlayWindow() const
     return m_backend->overlayWindow();
 }
 
+Renderer *SceneOpenGL::renderer() const
+{
+    return m_backend;
+}
+
 bool SceneOpenGL::initFailed() const
 {
     return !init_ok;

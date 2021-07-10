@@ -9,6 +9,7 @@
 #ifndef KWIN_SCENE_QPAINTER_DRM_BACKEND_H
 #define KWIN_SCENE_QPAINTER_DRM_BACKEND_H
 #include "qpainterbackend.h"
+#include "qpainterframeprofiler.h"
 
 #include <QObject>
 #include <QVector>
@@ -24,7 +25,7 @@ class DrmDumbBuffer;
 class DrmOutput;
 class DrmGpu;
 
-class DrmQPainterBackend : public QObject, public QPainterBackend
+class DrmQPainterBackend : public QPainterBackend
 {
     Q_OBJECT
 public:
@@ -34,12 +35,14 @@ public:
     bool needsFullRepaint(int screenId) const override;
     void beginFrame(int screenId) override;
     void endFrame(int screenId, int mask, const QRegion &damage) override;
+    std::chrono::nanoseconds renderTime(AbstractOutput *output) override;
 
 private:
     void initOutput(DrmOutput *output);
     struct Output {
         DrmOutput *output;
         QSharedPointer<DumbSwapchain> swapchain;
+        QPainterFrameProfiler profiler;
     };
     QVector<Output> m_outputs;
     DrmBackend *m_backend;

@@ -11,6 +11,7 @@
 #define KWIN_SCENE_QPAINTER_WAYLAND_BACKEND_H
 
 #include "qpainterbackend.h"
+#include "qpainterframeprofiler.h"
 
 #include <QObject>
 #include <QImage>
@@ -51,7 +52,9 @@ public:
     bool needsFullRepaint() const;
     void setNeedsFullRepaint(bool set);
 
+    WaylandOutput *platformOutput() const;
     QRegion mapToLocal(const QRegion &region) const;
+    QPainterFrameProfiler *profiler() const;
 
 private:
     WaylandOutput *m_waylandOutput;
@@ -59,12 +62,13 @@ private:
 
     QWeakPointer<KWayland::Client::Buffer> m_buffer;
     QImage m_backBuffer;
+    QScopedPointer<QPainterFrameProfiler> m_profiler;
     bool m_needsFullRepaint = true;
 
     friend class WaylandQPainterBackend;
 };
 
-class WaylandQPainterBackend : public QObject, public QPainterBackend
+class WaylandQPainterBackend : public QPainterBackend
 {
     Q_OBJECT
 public:
@@ -77,6 +81,7 @@ public:
     void beginFrame(int screenId) override;
 
     bool needsFullRepaint(int screenId) const override;
+    std::chrono::nanoseconds renderTime(AbstractOutput *output) override;
 
 private:
     void createOutput(AbstractOutput *waylandOutput);

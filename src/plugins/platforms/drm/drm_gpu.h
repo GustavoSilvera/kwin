@@ -30,6 +30,7 @@ class DrmCrtc;
 class DrmConnector;
 class DrmBackend;
 class AbstractEglBackend;
+class Renderer;
 
 class DrmGpu : public QObject
 {
@@ -70,6 +71,9 @@ public:
     EGLDisplay eglDisplay() const {
         return m_eglDisplay;
     }
+
+    Renderer *renderer() const;
+    void setRenderer(Renderer *renderer);
 
     AbstractEglBackend *eglBackend() const;
     void setEglBackend(AbstractEglBackend *eglBackend);
@@ -113,6 +117,7 @@ private:
 
     DrmBackend* const m_backend;
     QPointer<AbstractEglBackend> m_eglBackend;
+    QPointer<Renderer> m_renderer;
 
     const QString m_devNode;
     QSize m_cursorSize;

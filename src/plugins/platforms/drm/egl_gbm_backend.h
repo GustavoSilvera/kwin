@@ -9,6 +9,7 @@
 #ifndef KWIN_EGL_GBM_BACKEND_H
 #define KWIN_EGL_GBM_BACKEND_H
 #include "abstract_egl_drm_backend.h"
+#include "openglframeprofiler.h"
 
 #include <kwinglutils.h>
 
@@ -64,8 +65,8 @@ public:
     bool exportFramebuffer(DrmOutput *output, void *data, const QSize &size, uint32_t stride) override;
     int exportFramebufferAsDmabuf(DrmOutput *output, uint32_t *format, uint32_t *stride) override;
     QRegion beginFrameForSecondaryGpu(DrmOutput *output) override;
-
     bool directScanoutAllowed(int screen) const override;
+    std::chrono::nanoseconds renderTime(AbstractOutput *output) override;
 
 protected:
     void cleanupSurfaces() override;
@@ -92,6 +93,7 @@ private:
          */
         QList<QRegion> damageHistory;
 
+        QSharedPointer<OpenGLFrameProfiler> profiler;
         QSharedPointer<ShadowBuffer> shadowBuffer;
 
         KWaylandServer::SurfaceInterface *surfaceInterface = nullptr;
@@ -99,6 +101,7 @@ private:
         QSharedPointer<DumbSwapchain> importSwapchain;
     };
 
+    const Output *findOutput(AbstractOutput *output) const;
     bool resetOutput(Output &output, DrmOutput *drmOutput);
     EGLSurface createEglSurface(QSharedPointer<GbmSurface> gbmSurface) const;
 
@@ -106,8 +109,8 @@ private:
     void setViewport(const Output &output) const;
 
     void prepareRenderFramebuffer(const Output &output) const;
-    void renderFramebufferToSurface(Output &output);
     QRegion prepareRenderingForOutput(Output &output) const;
+    void finishRenderingForOutput(Output &output);
     void importFramebuffer(Output &output) const;
 
     bool presentOnOutput(Output &output, const QRegion &damagedRegion);

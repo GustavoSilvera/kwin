@@ -16,8 +16,7 @@ namespace KWin
 {
 
 DrmQPainterBackend::DrmQPainterBackend(DrmBackend *backend, DrmGpu *gpu)
-    : QObject()
-    , QPainterBackend()
+    : QPainterBackend()
     , m_backend(backend)
     , m_gpu(gpu)
 {
@@ -39,6 +38,8 @@ DrmQPainterBackend::DrmQPainterBackend(DrmBackend *backend, DrmGpu *gpu)
             m_outputs.erase(it);
         }
     );
+
+    m_gpu->setRenderer(this);
 }
 
 void DrmQPainterBackend::initOutput(DrmOutput *output)
@@ -75,6 +76,7 @@ bool DrmQPainterBackend::needsFullRepaint(int screenId) const
 
 void DrmQPainterBackend::beginFrame(int screenId)
 {
+    m_outputs[screenId].profiler.begin();
     m_outputs[screenId].swapchain->acquireBuffer();
 }
 
@@ -83,13 +85,21 @@ void DrmQPainterBackend::endFrame(int screenId, int mask, const QRegion &damage)
     Q_UNUSED(mask)
     Q_UNUSED(damage)
 
-    const Output &rendererOutput = m_outputs[screenId];
-    DrmOutput *drmOutput = rendererOutput.output;
+    Output &rendererOutput = m_outputs[screenId];
+    rendererOutput.profiler.end();
 
+    DrmOutput *drmOutput = rendererOutput.output;
     if (!drmOutput->present(rendererOutput.swapchain->currentBuffer())) {
         RenderLoopPrivate *renderLoopPrivate = RenderLoopPrivate::get(drmOutput->renderLoop());
         renderLoopPrivate->notifyFrameFailed();
     }
+}
+
+std::chrono::nanoseconds DrmQPainterBackend::renderTime(AbstractOutput *output)
+{
+    const int screenId = m_backend->enabledOutputs().indexOf(output);
+    Q_ASSERT(screenId != -1);
+    return m_outputs[screenId].profiler.result();
 }
 
 }

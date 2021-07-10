@@ -109,6 +109,11 @@ void EglX11Backend::screenGeometryChanged(const QSize &size)
     Q_UNUSED(size)
 }
 
+std::chrono::nanoseconds EglX11Backend::renderTime(AbstractOutput *output)
+{
+    return std::chrono::nanoseconds::zero();
+}
+
 PlatformSurfaceTexture *EglX11Backend::createPlatformSurfaceTextureWayland(SurfacePixmapWayland *pixmap)
 {
     return new BasicEGLSurfaceTextureWayland(this, pixmap);

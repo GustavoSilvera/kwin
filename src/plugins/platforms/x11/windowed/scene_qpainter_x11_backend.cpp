@@ -59,6 +59,7 @@ bool X11WindowedQPainterBackend::needsFullRepaint(int screenId) const
 void X11WindowedQPainterBackend::beginFrame(int screenId)
 {
     Q_UNUSED(screenId)
+    m_outputs[screenId]->profiler.begin();
 }
 
 void X11WindowedQPainterBackend::endFrame(int screenId, int mask, const QRegion &damage)
@@ -85,7 +86,15 @@ void X11WindowedQPainterBackend::endFrame(int screenId, int mask, const QRegion 
                   m_gc, buffer.width(), buffer.height(), 0, 0, 0, 24,
                   buffer.sizeInBytes(), buffer.constBits());
 
+    rendererOutput->profiler.end();
     rendererOutput->needsFullRepaint = false;
+}
+
+std::chrono::nanoseconds X11WindowedQPainterBackend::renderTime(AbstractOutput *output)
+{
+    const int screenId = kwinApp()->platform()->enabledOutputs().indexOf(output);
+    Q_ASSERT(screenId != -1);
+    return m_outputs[screenId]->profiler.result();
 }
 
 }

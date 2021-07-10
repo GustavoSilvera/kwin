@@ -79,8 +79,7 @@ static void destroyGlobalShareContext()
 AbstractEglBackend *AbstractEglBackend::s_primaryBackend = nullptr;
 
 AbstractEglBackend::AbstractEglBackend()
-    : QObject(nullptr)
-    , OpenGLBackend()
+    : OpenGLBackend()
 {
     if (s_primaryBackend == nullptr) {
         setPrimaryBackend(this);

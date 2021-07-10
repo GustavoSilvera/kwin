@@ -9,7 +9,10 @@
 #include "virtual_output.h"
 #include "virtual_backend.h"
 
+#include "composite.h"
+#include "renderer.h"
 #include "renderloop_p.h"
+#include "scene.h"
 #include "softwarevsyncmonitor.h"
 
 namespace KWin
@@ -70,7 +73,7 @@ void VirtualOutput::setGeometry(const QRect &geo)
 void VirtualOutput::vblank(std::chrono::nanoseconds timestamp)
 {
     RenderLoopPrivate *renderLoopPrivate = RenderLoopPrivate::get(m_renderLoop);
-    renderLoopPrivate->notifyFrameCompleted(timestamp);
+    renderLoopPrivate->notifyFrameCompleted(timestamp, std::chrono::nanoseconds::zero());
 }
 
 void VirtualOutput::updateEnablement(bool enable)

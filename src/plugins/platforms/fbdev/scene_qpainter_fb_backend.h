@@ -9,6 +9,7 @@
 #ifndef KWIN_SCENE_QPAINTER_FB_BACKEND_H
 #define KWIN_SCENE_QPAINTER_FB_BACKEND_H
 #include "qpainterbackend.h"
+#include "qpainterframeprofiler.h"
 
 #include <QObject>
 #include <QImage>
@@ -17,7 +18,7 @@ namespace KWin
 {
 class FramebufferBackend;
 
-class FramebufferQPainterBackend : public QObject, public QPainterBackend
+class FramebufferQPainterBackend : public QPainterBackend
 {
     Q_OBJECT
 public:
@@ -28,6 +29,7 @@ public:
     bool needsFullRepaint(int screenId) const override;
     void beginFrame(int screenId) override;
     void endFrame(int screenId, int mask, const QRegion &damage) override;
+    std::chrono::nanoseconds renderTime(AbstractOutput *output) override;
 
 private:
     void reactivate();
@@ -43,6 +45,7 @@ private:
     QImage m_backBuffer;
 
     FramebufferBackend *m_backend;
+    QPainterFrameProfiler m_profiler;
     bool m_needsFullRepaint;
 };
 

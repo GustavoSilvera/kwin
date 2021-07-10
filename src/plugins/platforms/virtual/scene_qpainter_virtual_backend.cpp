@@ -66,4 +66,10 @@ void VirtualQPainterBackend::endFrame(int screenId, int mask, const QRegion &dam
     }
 }
 
+std::chrono::nanoseconds VirtualQPainterBackend::renderTime(AbstractOutput *output)
+{
+    Q_UNUSED(output)
+    return std::chrono::nanoseconds::zero();
+}
+
 }

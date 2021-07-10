@@ -28,6 +28,7 @@ namespace Wayland
 WaylandQPainterOutput::WaylandQPainterOutput(WaylandOutput *output, QObject *parent)
     : QObject(parent)
     , m_waylandOutput(output)
+    , m_profiler(new QPainterFrameProfiler)
 {
 }
 
@@ -36,6 +37,16 @@ WaylandQPainterOutput::~WaylandQPainterOutput()
     if (m_buffer) {
         m_buffer.toStrongRef()->setUsed(false);
     }
+}
+
+WaylandOutput *WaylandQPainterOutput::platformOutput() const
+{
+    return m_waylandOutput;
+}
+
+QPainterFrameProfiler *WaylandQPainterOutput::profiler() const
+{
+    return m_profiler.data();
 }
 
 bool WaylandQPainterOutput::needsFullRepaint() const
@@ -197,6 +208,16 @@ bool WaylandQPainterBackend::needsFullRepaint(int screenId) const
     const WaylandQPainterOutput *rendererOutput = m_outputs.value(screenId);
     Q_ASSERT(rendererOutput);
     return rendererOutput->needsFullRepaint();
+}
+
+std::chrono::nanoseconds WaylandQPainterBackend::renderTime(AbstractOutput *output)
+{
+    for (WaylandQPainterOutput *rendererOutput : qAsConst(m_outputs)) {
+        if (rendererOutput->platformOutput() == output) {
+            return rendererOutput->profiler()->result();
+        }
+    }
+    return std::chrono::nanoseconds::zero();
 }
 
 }
