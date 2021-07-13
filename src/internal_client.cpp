@@ -21,7 +21,7 @@
 
 Q_DECLARE_METATYPE(NET::WindowType)
 
-static const QByteArray s_skipClosePropertyName = QByteArrayLiteral("KWIN_SKIP_CLOSE_ANIMATION");
+static const QByteArray s_skipClosePropertyName = QByteArrayLiteral("kwinSkipCloseAnimation");
 static const QByteArray s_skipOpenPropertyName = QByteArrayLiteral("kwinSkipOpenAnimation");
 static const QByteArray s_shadowEnabledPropertyName = QByteArrayLiteral("kwin_shadow_enabled");
 
