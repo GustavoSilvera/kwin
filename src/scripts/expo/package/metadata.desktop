@@ -1,0 +1,22 @@
+[Desktop Entry]
+Type=Service
+Name=Expo
+Comment=Zoom out until all opened windows can be displayed side-by-side (WIP)
+Icon=preferences-system-windows-script-test
+
+X-Plasma-API=declarativescript
+X-Plasma-MainScript=ui/main.qml
+
+X-KDE-PluginInfo-Author=Vlad Zahorodnii
+X-KDE-PluginInfo-Email=vlad.zahorodnii@kde.org
+X-KDE-PluginInfo-License=GPL
+X-KDE-PluginInfo-Name=expo
+X-KDE-PluginInfo-Version=1.0
+X-KDE-PluginInfo-EnabledByDefault=false
+
+X-KWin-Exclude-Listing=true
+
+X-KDE-ServiceTypes=KWin/Script,KCModule
+X-KDE-Library=kwin/effects/configs/kcm_kwin4_genericscripted
+X-KDE-ParentComponents=expo
+X-KDE-PluginKeyword=expo

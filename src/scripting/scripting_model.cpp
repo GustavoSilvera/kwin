@@ -860,13 +860,102 @@ void ClientFilterModel::setFilter(const QString &filter)
     invalidateFilter();
 }
 
+QString ClientFilterModel::screenName() const
+{
+    return m_screenName.value_or(QString());
+}
+
+void ClientFilterModel::setScreenName(const QString &screen)
+{
+    if (!m_screenName.has_value() || m_screenName.value() != screen) {
+        m_screenName = screen;
+        Q_EMIT screenNameChanged();
+        invalidateFilter();
+    }
+}
+
+void ClientFilterModel::resetScreenName()
+{
+    if (m_screenName.has_value()) {
+        m_screenName.reset();
+        Q_EMIT screenNameChanged();
+        invalidateFilter();
+    }
+}
+
+int ClientFilterModel::desktop() const
+{
+    return m_desktop.value_or(-1);
+}
+
+void ClientFilterModel::setDesktop(int desktop)
+{
+    if (!m_desktop.has_value() || m_desktop.value() != desktop) {
+        m_desktop = desktop;
+        Q_EMIT desktopChanged();
+        invalidateFilter();
+    }
+}
+
+void ClientFilterModel::resetDesktop()
+{
+    if (m_desktop.has_value()) {
+        m_desktop.reset();
+        Q_EMIT desktopChanged();
+        invalidateFilter();
+    }
+}
+
+ClientFilterModel::WindowTypes ClientFilterModel::exclude() const
+{
+    return m_exclude.value_or(WindowTypes());
+}
+
+void ClientFilterModel::setExclude(WindowTypes exclude)
+{
+    if (!m_exclude.has_value() || m_exclude != exclude) {
+        m_exclude = exclude;
+        Q_EMIT excludeChanged();
+        invalidateFilter();
+    }
+}
+
+void ClientFilterModel::resetExclude()
+{
+    if (m_exclude.has_value()) {
+        m_exclude.reset();
+        Q_EMIT excludeChanged();
+        invalidateFilter();
+    }
+}
+
+ClientFilterModel::WindowTypes ClientFilterModel::include() const
+{
+    return m_include.value_or(WindowTypes());
+}
+
+void ClientFilterModel::setInclude(WindowTypes include)
+{
+    if (!m_include.has_value() || m_include != include) {
+        m_include = include;
+        Q_EMIT includeChanged();
+        invalidateFilter();
+    }
+}
+
+void ClientFilterModel::resetInclude()
+{
+    if (m_include.has_value()) {
+        m_include.reset();
+        Q_EMIT includeChanged();
+        invalidateFilter();
+    }
+}
+
 bool ClientFilterModel::filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const
 {
     if (!m_clientModel) {
         return false;
-    }
-    if (m_filter.isEmpty()) {
-        return true;
     }
     QModelIndex index = m_clientModel->index(sourceRow, 0, sourceParent);
     if (!index.isValid()) {
@@ -886,22 +975,68 @@ bool ClientFilterModel::filterAcceptsRow(int sourceRow, const QModelIndex &sourc
     if (!client) {
         return false;
     }
-    if (client->caption().contains(m_filter, Qt::CaseInsensitive)) {
-        return true;
+
+    if (m_screenName.has_value()) {
+        if (screens()->name(client->screen()) != m_screenName) {
+            return false;
+        }
     }
-    const QString windowRole(QString::fromUtf8(client->windowRole()));
-    if (windowRole.contains(m_filter, Qt::CaseInsensitive)) {
-        return true;
+
+    if (m_desktop.has_value()) {
+        if (client->desktop() != m_desktop) {
+            return false;
+        }
     }
-    const QString resourceName(QString::fromUtf8(client->resourceName()));
-    if (resourceName.contains(m_filter, Qt::CaseInsensitive)) {
-        return true;
+
+    if (m_include.has_value()) {
+        if (!(windowTypeMask(client) & m_include.value())) {
+            return false;
+        }
     }
-    const QString resourceClass(QString::fromUtf8(client->resourceClass()));
-    if (resourceClass.contains(m_filter, Qt::CaseInsensitive)) {
-        return true;
+
+    if (m_exclude.has_value()) {
+        if (windowTypeMask(client) & m_exclude.value()) {
+            return false;
+        }
     }
-    return false;
+
+    if (!m_filter.isEmpty()) {
+        if (client->caption().contains(m_filter, Qt::CaseInsensitive)) {
+            return true;
+        }
+        const QString windowRole(QString::fromUtf8(client->windowRole()));
+        if (windowRole.contains(m_filter, Qt::CaseInsensitive)) {
+            return true;
+        }
+        const QString resourceName(QString::fromUtf8(client->resourceName()));
+        if (resourceName.contains(m_filter, Qt::CaseInsensitive)) {
+            return true;
+        }
+        const QString resourceClass(QString::fromUtf8(client->resourceClass()));
+        if (resourceClass.contains(m_filter, Qt::CaseInsensitive)) {
+            return true;
+        }
+        return false;
+    }
+
+    return true;
+}
+
+ClientFilterModel::WindowTypes ClientFilterModel::windowTypeMask(AbstractClient *client) const
+{
+    WindowTypes mask;
+    if (client->isNormalWindow()) {
+        mask |= WindowNormal;
+    } else if (client->isDock()) {
+        mask |= WindowDock;
+    } else if (client->isDesktop()) {
+        mask |= WindowDesktop;
+    } else if (client->isNotification()) {
+        mask |= WindowNotification;
+    } else if (client->isCriticalNotification()) {
+        mask |= WindowCriticalNotification;
+    }
+    return mask;
 }
 
 } // namespace Scripting

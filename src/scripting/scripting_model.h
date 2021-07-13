@@ -13,6 +13,8 @@
 #include <QSortFilterProxyModel>
 #include <QList>
 
+#include <optional>
+
 namespace KWin {
 class AbstractClient;
 class Client;
@@ -27,6 +29,12 @@ class ClientModel : public QAbstractItemModel
     Q_ENUMS(Exclude)
     Q_PROPERTY(Exclusions exclusions READ exclusions WRITE setExclusions NOTIFY exclusionsChanged)
 public:
+    enum ClientModelRoles {
+        ClientRole = Qt::UserRole,
+        ScreenRole,
+        DesktopRole,
+        ActivityRole
+    };
     enum Exclusion {
         NoExclusion = 0,
         // window types
@@ -79,12 +87,6 @@ private Q_SLOTS:
     void levelEndRemove();
 
 protected:
-    enum ClientModelRoles {
-        ClientRole = Qt::UserRole,
-        ScreenRole,
-        DesktopRole,
-        ActivityRole
-    };
     void setLevels(QList<LevelRestriction> restrictions);
 
 private:
@@ -274,26 +276,67 @@ class ClientFilterModel : public QSortFilterProxyModel
     Q_OBJECT
     Q_PROPERTY(KWin::ScriptingClientModel::ClientModel *clientModel READ clientModel WRITE setClientModel NOTIFY clientModelChanged)
     Q_PROPERTY(QString filter READ filter WRITE setFilter NOTIFY filterChanged)
+    Q_PROPERTY(QString screenName READ screenName WRITE setScreenName RESET resetScreenName NOTIFY screenNameChanged)
+    Q_PROPERTY(int desktop READ desktop WRITE setDesktop RESET resetDesktop NOTIFY desktopChanged)
+    Q_PROPERTY(WindowTypes exclude READ exclude WRITE setExclude RESET resetExclude NOTIFY excludeChanged)
+    Q_PROPERTY(WindowTypes include READ include WRITE setInclude RESET resetInclude NOTIFY includeChanged)
+
 public:
     ClientFilterModel(QObject *parent = nullptr);
     ~ClientFilterModel() override;
-    ClientModel *clientModel() const;
-    const QString &filter() const;
 
-public Q_SLOTS:
+    enum WindowType {
+        WindowNormal = 0x1,
+        WindowDock = 0x2,
+        WindowDesktop = 0x4,
+        WindowNotification = 0x8,
+        WindowCriticalNotification = 0x10,
+    };
+    Q_DECLARE_FLAGS(WindowTypes, WindowType)
+    Q_FLAG(WindowTypes)
+
+    ClientModel *clientModel() const;
     void setClientModel(ClientModel *clientModel);
+
+    const QString &filter() const;
     void setFilter(const QString &filter);
+
+    QString screenName() const;
+    void setScreenName(const QString &screenName);
+    void resetScreenName();
+
+    int desktop() const;
+    void setDesktop(int desktop);
+    void resetDesktop();
+
+    WindowTypes exclude() const;
+    void setExclude(WindowTypes exclude);
+    void resetExclude();
+
+    WindowTypes include() const;
+    void setInclude(WindowTypes include);
+    void resetInclude();
 
 protected:
     bool filterAcceptsRow(int source_row, const QModelIndex &source_parent) const override;
 
 Q_SIGNALS:
+    void screenNameChanged();
+    void desktopChanged();
+    void excludeChanged();
+    void includeChanged();
     void clientModelChanged();
     void filterChanged();
 
 private:
+    WindowTypes windowTypeMask(AbstractClient *client) const;
+
     ClientModel *m_clientModel;
     QString m_filter;
+    std::optional<QString> m_screenName;
+    std::optional<int> m_desktop;
+    std::optional<WindowTypes> m_exclude;
+    std::optional<WindowTypes> m_include;
 };
 
 inline
