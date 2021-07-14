@@ -299,6 +299,11 @@ class KWIN_EXPORT Toplevel : public QObject
      */
     Q_PROPERTY(int pid READ pid CONSTANT)
 
+    /**
+     * The position of this window within Workspace's window stack.
+     */
+    Q_PROPERTY(int stackingOrder READ stackingOrder NOTIFY stackingOrderChanged)
+
 public:
     explicit Toplevel();
     virtual xcb_window_t frameId() const;
@@ -575,7 +580,11 @@ public:
      */
     virtual bool isShade() const { return false; }
 
+    int stackingOrder() const;
+    void setStackingOrder(int order); ///< @internal
+
 Q_SIGNALS:
+    void stackingOrderChanged();
     void shadeChanged();
     void markedAsZombie();
     void opacityChanged(KWin::Toplevel* toplevel, qreal oldOpacity);
@@ -731,6 +740,7 @@ private:
     // when adding new data members, check also copyToDeleted()
     qreal m_screenScale = 1.0;
     qreal m_opacity = 1.0;
+    int m_stackingOrder = 0;
 };
 
 inline xcb_window_t Toplevel::window() const
