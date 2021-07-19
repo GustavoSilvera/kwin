@@ -67,6 +67,9 @@ QString WaylandClient::captionSuffix() const
 
 QRect WaylandClient::transparentRect() const
 {
+    if (isShade()) {
+        return QRect(clientPos(), clientSize());
+    }
     return QRect();
 }
 
