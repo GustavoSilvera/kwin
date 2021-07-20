@@ -311,7 +311,7 @@ public:
      * Returns the geometry of the Toplevel, excluding invisible portions, e.g.
      * server-side and client-side drop shadows, etc.
      */
-    virtual QRect frameGeometry() const;
+    QRect frameGeometry() const;
     /**
      * Returns the geometry of the client window, in global screen coordinates.
      */
@@ -332,13 +332,13 @@ public:
      * Default implementation returns same as geometry.
      */
     virtual QRect inputGeometry() const;
-    virtual QSize size() const;
-    virtual QPoint pos() const;
-    virtual QRect rect() const;
-    virtual int x() const;
-    virtual int y() const;
-    virtual int width() const;
-    virtual int height() const;
+    QSize size() const;
+    QPoint pos() const;
+    QRect rect() const;
+    int x() const;
+    int y() const;
+    int width() const;
+    int height() const;
     bool isOnScreen(int screen) const;   // true if it's at least partially there
     bool isOnOutput(AbstractOutput *output) const;
     bool isOnActiveScreen() const;

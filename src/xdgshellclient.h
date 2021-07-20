@@ -122,7 +122,6 @@ public:
     bool isFullScreen() const override;
     bool isRequestedFullScreen() const override;
     bool isMovableAcrossScreens() const override;
-    bool isShadeable() const override;
     bool isMovable() const override;
     bool isResizable() const override;
     bool isCloseable() const override;
@@ -134,16 +133,6 @@ public:
     bool userCanSetFullScreen() const override;
     bool userCanSetNoBorder() const override;
     bool noBorder() const override;
-
-    QRect frameGeometry() const override;
-    QSize size() const override;
-    QPoint pos() const override;
-    QRect rect() const override;
-    int x() const override;
-    int y() const override;
-    int width() const override;
-    int height() const override;
-
     void setNoBorder(bool set) override;
     void updateDecoration(bool check_workspace_pos, bool force = false) override;
     QString preferredColorScheme() const override;

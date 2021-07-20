@@ -644,10 +644,6 @@ QMatrix4x4 Toplevel::inputTransformation() const
 
 bool Toplevel::hitTest(const QPoint &point) const
 {
-    // a shaded window has nothing to accept input with
-    if (isShade()) {
-        return false;
-    }
     if (m_surface && m_surface->isMapped()) {
         return m_surface->inputSurfaceAt(mapToLocal(point));
     }

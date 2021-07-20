@@ -235,50 +235,6 @@ void XdgSurfaceClient::handleNextWindowGeometry()
     }
 }
 
-QRect XdgToplevelClient::frameGeometry() const
-{
-    if (isShade()) {
-        return QRect(m_frameGeometry.topLeft(), decoration()->rect().size());
-    }
-
-    return m_frameGeometry;
-}
-
-QSize XdgToplevelClient::size() const
-{
-    return frameGeometry().size();
-}
-
-QPoint XdgToplevelClient::pos() const
-{
-    return frameGeometry().topLeft();
-}
-
-QRect XdgToplevelClient::rect() const
-{
-    return QRect(0, 0, width(), height());
-}
-
-int XdgToplevelClient::x() const
-{
-    return frameGeometry().x();
-}
-
-int XdgToplevelClient::y() const
-{
-    return frameGeometry().y();
-}
-
-int XdgToplevelClient::width() const
-{
-    return frameGeometry().width();
-}
-
-int XdgToplevelClient::height() const
-{
-    return frameGeometry().height();
-}
-
 bool XdgSurfaceClient::haveNextWindowGeometry() const
 {
     return m_haveNextWindowGeometry || m_lastAcknowledgedConfigure;
@@ -496,11 +452,6 @@ bool XdgToplevelClient::isFullScreen() const
 bool XdgToplevelClient::isRequestedFullScreen() const
 {
     return m_isRequestedFullScreen;
-}
-
-bool XdgToplevelClient::isShadeable() const
-{
-    return !noBorder();
 }
 
 bool XdgToplevelClient::isMovable() const
