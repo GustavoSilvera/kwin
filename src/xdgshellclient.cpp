@@ -286,6 +286,27 @@ bool XdgToplevelClient::isShadeable() const
     return !noBorder();
 }
 
+void XdgToplevelClient::doSetShade(ShadeMode previousShadeMode)
+{
+    Q_UNUSED(previousShadeMode)
+
+    QRect frameGeometry(pos(), clientSizeToFrameSize(m_windowGeometry.size()));
+
+    switch (shadeMode()) {
+    case ShadeMode::ShadeNormal:
+        frameGeometry.setHeight(borderTop() + borderBottom());
+        updateGeometry(frameGeometry);
+        break;
+    case ShadeMode::ShadeNone:
+    case ShadeMode::ShadeActivated:
+    case ShadeMode::ShadeHover:
+        updateGeometry(frameGeometry);
+        break;
+    }
+
+    addWorkspaceRepaint(frameGeometry);
+}
+
 void XdgSurfaceClient::moveResizeInternal(const QRect &rect, MoveResizeMode mode)
 {
     if (areGeometryUpdatesBlocked()) {
