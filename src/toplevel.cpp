@@ -10,6 +10,7 @@
 
 #include "abstract_client.h"
 #include "abstract_output.h"
+#include "wayland_server.h"
 #ifdef KWIN_BUILD_ACTIVITIES
 #include "activities.h"
 #endif
@@ -644,6 +645,11 @@ QMatrix4x4 Toplevel::inputTransformation() const
 
 bool Toplevel::hitTest(const QPoint &point) const
 {
+    // there's no window contents to hit when shaded,
+    // so we don't need to bother checking
+    if (isShade() && waylandServer()) {
+        return false;
+    }
     if (m_surface && m_surface->isMapped()) {
         return m_surface->inputSurfaceAt(mapToLocal(point));
     }

@@ -123,6 +123,7 @@ public:
     bool isRequestedFullScreen() const override;
     bool isMovableAcrossScreens() const override;
     bool isMovable() const override;
+    bool isShadeable() const override;
     bool isResizable() const override;
     bool isCloseable() const override;
     bool isFullScreenable() const override;

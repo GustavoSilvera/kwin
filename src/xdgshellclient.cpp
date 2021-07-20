@@ -281,10 +281,26 @@ QRect XdgSurfaceClient::adjustMoveResizeGeometry(const QRect &rect) const
     return geometry;
 }
 
+bool XdgToplevelClient::isShadeable() const
+{
+    return !noBorder();
+}
+
 void XdgSurfaceClient::moveResizeInternal(const QRect &rect, MoveResizeMode mode)
 {
     if (areGeometryUpdatesBlocked()) {
         setPendingMoveResizeMode(mode);
+        return;
+    }
+
+    if (isShade()) {
+        auto frameGeometry = rect;
+        if (frameGeometry.height() == borderTop() + borderBottom()) {
+            return;
+        }
+
+        frameGeometry.setHeight(borderTop() + borderBottom());
+        updateGeometry(frameGeometry);
         return;
     }
 
