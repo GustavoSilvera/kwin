@@ -645,9 +645,8 @@ QMatrix4x4 Toplevel::inputTransformation() const
 
 bool Toplevel::hitTest(const QPoint &point) const
 {
-    // there's no window contents to hit when shaded,
-    // so we don't need to bother checking
-    if (isShade() && waylandServer()) {
+    // there's no window contents to hit when shaded, so we don't need to bother checking
+    if (isShade()) {
         return false;
     }
     if (m_surface && m_surface->isMapped()) {
