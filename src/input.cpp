@@ -2276,6 +2276,11 @@ void InputRedirection::setupInputFilters()
         }
         installInputEventFilter(new DragAndDropInputFilter);
         installInputEventFilter(new LockScreenFilter);
+    }
+    if (hasGlobalShortcutSupport) {
+        installInputEventFilter(new GlobalShortcutFilter);
+    }
+    if (waylandServer()) {
         installInputEventFilter(new PopupInputFilter);
         m_windowSelector = new WindowSelectorFilter;
         installInputEventFilter(m_windowSelector);
@@ -2288,9 +2293,6 @@ void InputRedirection::setupInputFilters()
 #ifdef KWIN_BUILD_TABBOX
     installInputEventFilter(new TabBoxInputFilter);
 #endif
-    if (hasGlobalShortcutSupport) {
-        installInputEventFilter(new GlobalShortcutFilter);
-    }
     installInputEventFilter(new DecorationEventFilter);
     installInputEventFilter(new InternalWindowEventFilter);
     if (waylandServer()) {
