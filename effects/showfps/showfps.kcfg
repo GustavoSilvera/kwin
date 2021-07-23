@@ -30,5 +30,8 @@
         <entry name="ShowNoBenchmark" type="Bool">
             <default>false</default>
         </entry>
+        <entry name="ColorizeText" type="Bool">
+            <default>true</default>
+        </entry>
     </group>
 </kcfg>

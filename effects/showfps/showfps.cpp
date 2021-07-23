@@ -76,6 +76,8 @@ void ShowFpsEffect::reconfigure(ReconfigureFlags)
     y = ShowFpsConfig::y();
     m_showNoBenchmark = ShowFpsConfig::showNoBenchmark();
     m_showGraph = ShowFpsConfig::showGraph();
+    m_colorizeText = ShowFpsConfig::colorizeText();
+    maxFpsSoFar = 0; // reset to 0
     const QSize screenSize = effects->virtualScreenSize();
     if (x == -10000)   // there's no -0 :(
         x = screenSize.width() - 2 * NUM_PAINTS - FPS_WIDTH;
@@ -549,7 +551,22 @@ QImage ShowFpsEffect::fpsTextImage(int fps)
     im.fill(Qt::transparent);
     QPainter painter(&im);
     painter.setFont(textFont);
-    painter.setPen(textColor);
+    QColor col = textColor;
+    if (fps > maxFpsSoFar) {
+        maxFpsSoFar = fps; // keep track of highest fps so far
+    }
+    if (m_colorizeText) {
+        if (fps >= maxFpsSoFar / 2) {
+            col = QColor(0, 255, 0); // green
+        } else if (fps >= maxFpsSoFar / 3) {
+            col = QColor(255, 255, 0); // yellow
+        } else if (fps >= maxFpsSoFar / 4) {
+            col = QColor(255, 0, 0); // red
+        } else {
+            col = QColor(0, 0, 0); // black
+        }
+    }
+    painter.setPen(col);
     painter.drawText(QRect(0, 0, 100, 100), textAlign, QString::number(fps));
     painter.end();
     return im;

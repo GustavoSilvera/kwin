@@ -44,6 +44,7 @@ class ShowFpsEffect
     Q_PROPERTY(QColor textColor READ configuredTextColor)
     Q_PROPERTY(bool showGraph READ configuredShowGraph)
     Q_PROPERTY(bool showNoBenchmark READ configuredShowNoBenchmark)
+    Q_PROPERTY(bool colorizeText READ configuredColorizeText)
 
 public:
     ShowFpsEffect();
@@ -82,6 +83,9 @@ public:
     bool configuredShowNoBenchmark() const {
         return m_showNoBenchmark;
     }
+    bool configuredColorizeText() const {
+        return m_colorizeText;
+    }
 private:
     void paintGL(int fps, const QMatrix4x4 &projectionMatrix);
 #ifdef KWIN_HAVE_XRENDER_COMPOSITING
@@ -103,6 +107,8 @@ private:
     double alpha;
     bool m_showNoBenchmark; 
     bool m_showGraph;
+    bool m_colorizeText;
+    int maxFpsSoFar;
     int x;
     int y;
     QRect fps_rect;
