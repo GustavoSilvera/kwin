@@ -62,7 +62,9 @@ ShowFpsEffect::ShowFpsEffect()
             ++i)
         frames[ i ] = 0;
     m_noBenchmark->setAlignment(Qt::AlignTop | Qt::AlignRight);
-    m_noBenchmark->setText(i18n("This effect is not a benchmark"));
+    if (m_showNoBenchmark) {
+        m_noBenchmark->setText(i18n("This effect is not a benchmark"));
+    }
     reconfigure(ReconfigureAll);
 }
 
@@ -72,6 +74,7 @@ void ShowFpsEffect::reconfigure(ReconfigureFlags)
     alpha = ShowFpsConfig::alpha();
     x = ShowFpsConfig::x();
     y = ShowFpsConfig::y();
+    m_showNoBenchmark = ShowFpsConfig::showNoBenchmark();
     const QSize screenSize = effects->virtualScreenSize();
     if (x == -10000)   // there's no -0 :(
         x = screenSize.width() - 2 * NUM_PAINTS - FPS_WIDTH;
@@ -161,8 +164,6 @@ void ShowFpsEffect::paintScreen(int mask, const QRegion &region, ScreenPaintData
             ++i)
         if (abs(lastTimestamp - frames[ i ]) < 1000)
             ++fps; // count all frames in the last second
-    if (fps > MAX_TIME)
-        fps = MAX_TIME; // keep it the same height
     if (effects->isOpenGLCompositing()) {
         paintGL(fps, data.projectionMatrix());
         glFinish(); // make sure all rendering is done
@@ -176,7 +177,9 @@ void ShowFpsEffect::paintScreen(int mask, const QRegion &region, ScreenPaintData
     if (effects->compositingType() == QPainterCompositing) {
         paintQPainter(fps);
     }
-    m_noBenchmark->render(infiniteRegion(), 1.0, alpha);
+    if (m_showNoBenchmark) {
+        m_noBenchmark->render(infiniteRegion(), 1.0, alpha);
+    }
 }
 
 void ShowFpsEffect::paintGL(int fps, const QMatrix4x4 &projectionMatrix)

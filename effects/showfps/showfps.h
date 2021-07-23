@@ -42,6 +42,8 @@ class ShowFpsEffect
     Q_PROPERTY(int textAlign READ configuredTextAlign)
     Q_PROPERTY(QFont textFont READ configuredTextFont)
     Q_PROPERTY(QColor textColor READ configuredTextColor)
+    Q_PROPERTY(bool showNoBenchmark READ configuredShowNoBenchmark)
+
 public:
     ShowFpsEffect();
     void reconfigure(ReconfigureFlags) override;
@@ -73,6 +75,9 @@ public:
     QColor configuredTextColor() const {
         return textColor;
     }
+    bool configuredShowNoBenchmark() const {
+        return m_showNoBenchmark;
+    }
 private:
     void paintGL(int fps, const QMatrix4x4 &projectionMatrix);
 #ifdef KWIN_HAVE_XRENDER_COMPOSITING
@@ -92,6 +97,7 @@ private:
     qint64 frames[ MAX_FPS ]; // the time when the frame was done
     int frames_pos; // position in the queue
     double alpha;
+    bool m_showNoBenchmark; 
     int x;
     int y;
     QRect fps_rect;
