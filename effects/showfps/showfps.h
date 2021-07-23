@@ -108,6 +108,7 @@ private:
     bool m_showNoBenchmark; 
     bool m_showGraph;
     bool m_colorizeText;
+    qreal detectedMaxFps;
     int maxFpsSoFar;
     int x;
     int y;

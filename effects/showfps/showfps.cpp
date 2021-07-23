@@ -36,6 +36,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <QPainter>
 #include <QVector2D>
 #include <QPalette>
+#include <QScreen>
+#include <QApplication>
 
 #include <cmath>
 
@@ -61,6 +63,15 @@ ShowFpsEffect::ShowFpsEffect()
             i < MAX_FPS;
             ++i)
         frames[ i ] = 0;
+    // detect highest monitor refresh rate
+    detectedMaxFps = 0.0;
+    int num = QApplication::screens().count();
+    for (int i = 0; i < num; i++) { // first 100 monitors
+        QScreen *screen = QApplication::screens().at(i);
+        if (screen->refreshRate() > detectedMaxFps){
+            detectedMaxFps = screen->refreshRate();
+        }
+    }
     if (m_showNoBenchmark) {
         m_noBenchmark->setAlignment(Qt::AlignTop | Qt::AlignRight);
         m_noBenchmark->setText(i18n("This effect is not a benchmark"));
@@ -552,6 +563,9 @@ QImage ShowFpsEffect::fpsTextImage(int fps)
     QPainter painter(&im);
     painter.setFont(textFont);
     QColor col = textColor;
+    if (detectedMaxFps > 0) {
+        fps = std::min(fps, qRound(detectedMaxFps));
+    }
     if (fps > maxFpsSoFar) {
         maxFpsSoFar = fps; // keep track of highest fps so far
     }
