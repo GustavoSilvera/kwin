@@ -25,6 +25,9 @@
 #include <QPainter>
 #include <QVector2D>
 #include <QPalette>
+#include <QScreen>
+#include <QApplication>
+#include <QGuiApplication>
 
 #include <cmath>
 
@@ -50,8 +53,19 @@ ShowFpsEffect::ShowFpsEffect()
             i < MAX_FPS;
             ++i)
         frames[ i ] = 0;
-    m_noBenchmark->setAlignment(Qt::AlignTop | Qt::AlignRight);
-    m_noBenchmark->setText(i18n("This effect is not a benchmark"));
+    // detect highest monitor refresh rate
+    detectedMaxFps = 0.0;
+    int numMonitors = QApplication::screens().count();
+    for (int i = 0; i < numMonitors; i++) {
+        QScreen *screen = QApplication::screens().at(i);
+        if (screen->refreshRate() > detectedMaxFps){
+            detectedMaxFps = screen->refreshRate();
+        }
+    }
+    if (m_showNoBenchmark) {
+        m_noBenchmark->setAlignment(Qt::AlignTop | Qt::AlignRight);
+        m_noBenchmark->setText(i18n("This effect is not a benchmark"));
+    }
     reconfigure(ReconfigureAll);
 }
 
@@ -61,7 +75,16 @@ void ShowFpsEffect::reconfigure(ReconfigureFlags)
     alpha = ShowFpsConfig::alpha();
     x = ShowFpsConfig::x();
     y = ShowFpsConfig::y();
-    const QSize screenSize = effects->virtualScreenSize();
+    m_showNoBenchmark = ShowFpsConfig::showNoBenchmark();
+    m_showGraph = ShowFpsConfig::showGraph();
+    m_colorizeText = ShowFpsConfig::colorizeText();
+    m_forcePrimaryScreen = ShowFpsConfig::forcePrimaryScreen();
+    maxFpsSoFar = 0; // reset to 0
+    QSize screenSize;
+    if (m_forcePrimaryScreen) // useful for multimonitor setups
+        screenSize = QGuiApplication::primaryScreen()->size();
+    else
+        screenSize = effects->virtualScreenSize();
     if (x == -10000)   // there's no -0 :(
         x = screenSize.width() - 2 * NUM_PAINTS - FPS_WIDTH;
     else if (x < 0)
@@ -150,8 +173,6 @@ void ShowFpsEffect::paintScreen(int mask, const QRegion &region, ScreenPaintData
             ++i)
         if (abs(lastTimestamp - frames[ i ]) < 1000)
             ++fps; // count all frames in the last second
-    if (fps > MAX_TIME)
-        fps = MAX_TIME; // keep it the same height
     if (effects->isOpenGLCompositing()) {
         paintGL(fps, data.projectionMatrix());
         glFinish(); // make sure all rendering is done
@@ -165,7 +186,9 @@ void ShowFpsEffect::paintScreen(int mask, const QRegion &region, ScreenPaintData
     if (effects->compositingType() == QPainterCompositing) {
         paintQPainter(fps);
     }
-    m_noBenchmark->render(infiniteRegion(), 1.0, alpha);
+    if (m_showNoBenchmark) {
+        m_noBenchmark->render(infiniteRegion(), 1.0, alpha);
+    }
 }
 
 void ShowFpsEffect::paintGL(int fps, const QMatrix4x4 &projectionMatrix)
@@ -180,54 +203,55 @@ void ShowFpsEffect::paintGL(int fps, const QMatrix4x4 &projectionMatrix)
     binder.shader()->setUniform(GLShader::ModelViewProjectionMatrix, projectionMatrix);
     GLVertexBuffer *vbo = GLVertexBuffer::streamingBuffer();
     vbo->reset();
-    QColor color(255, 255, 255);
-    color.setAlphaF(alpha);
-    vbo->setColor(color);
-    QVector<float> verts;
-    verts.reserve(12);
-    verts << x + 2 * NUM_PAINTS + FPS_WIDTH << y;
-    verts << x << y;
-    verts << x << y + MAX_TIME;
-    verts << x << y + MAX_TIME;
-    verts << x + 2 * NUM_PAINTS + FPS_WIDTH << y + MAX_TIME;
-    verts << x + 2 * NUM_PAINTS + FPS_WIDTH << y;
-    vbo->setData(6, 2, verts.constData(), nullptr);
-    vbo->render(GL_TRIANGLES);
-    y += MAX_TIME; // paint up from the bottom
-    color.setRed(0);
-    color.setGreen(0);
-    vbo->setColor(color);
-    verts.clear();
-    verts << x + FPS_WIDTH << y - fps;
-    verts << x << y - fps;
-    verts << x << y;
-    verts << x << y;
-    verts << x + FPS_WIDTH << y;
-    verts << x + FPS_WIDTH << y - fps;
-    vbo->setData(6, 2, verts.constData(), nullptr);
-    vbo->render(GL_TRIANGLES);
+    if (m_showGraph) {
+        QColor color(255, 255, 255);
+        color.setAlphaF(alpha);
+        vbo->setColor(color);
+        QVector<float> verts;
+        verts.reserve(12);
+        verts << x + 2 * NUM_PAINTS + FPS_WIDTH << y;
+        verts << x << y;
+        verts << x << y + MAX_TIME;
+        verts << x << y + MAX_TIME;
+        verts << x + 2 * NUM_PAINTS + FPS_WIDTH << y + MAX_TIME;
+        verts << x + 2 * NUM_PAINTS + FPS_WIDTH << y;
+        vbo->setData(6, 2, verts.constData(), nullptr);
+        vbo->render(GL_TRIANGLES);
+        y += MAX_TIME; // paint up from the bottom
+        color.setRed(0);
+        color.setGreen(0);
+        vbo->setColor(color);
+        verts.clear();
+        verts << x + FPS_WIDTH << y - fps;
+        verts << x << y - fps;
+        verts << x << y;
+        verts << x << y;
+        verts << x + FPS_WIDTH << y;
+        verts << x + FPS_WIDTH << y - fps;
+        vbo->setData(6, 2, verts.constData(), nullptr);
+        vbo->render(GL_TRIANGLES);
 
 
-    color.setBlue(0);
-    vbo->setColor(color);
-    QVector<float> vertices;
-    for (int i = 10;
-            i < MAX_TIME;
-            i += 10) {
-        vertices << x << y - i;
-        vertices << x + FPS_WIDTH << y - i;
+        color.setBlue(0);
+        vbo->setColor(color);
+        QVector<float> vertices;
+        for (int i = 10;
+                i < MAX_TIME;
+                i += 10) {
+            vertices << x << y - i;
+            vertices << x + FPS_WIDTH << y - i;
+        }
+        vbo->setData(vertices.size() / 2, 2, vertices.constData(), nullptr);
+        vbo->render(GL_LINES);
+        x += FPS_WIDTH;
+
+        // Paint FPS graph
+        paintFPSGraph(x, y);
+        x += NUM_PAINTS;
+
+        // Paint amount of rendered pixels graph
+        paintDrawSizeGraph(x, y);
     }
-    vbo->setData(vertices.size() / 2, 2, vertices.constData(), nullptr);
-    vbo->render(GL_LINES);
-    x += FPS_WIDTH;
-
-    // Paint FPS graph
-    paintFPSGraph(x, y);
-    x += NUM_PAINTS;
-
-    // Paint amount of rendered pixels graph
-    paintDrawSizeGraph(x, y);
-
     // Paint FPS numerical value
     if (fpsTextRect.isValid()) {
         fpsText.reset(new GLTexture(fpsTextImage(fps)));
@@ -253,45 +277,46 @@ void ShowFpsEffect::paintGL(int fps, const QMatrix4x4 &projectionMatrix)
 */
 void ShowFpsEffect::paintXrender(int fps)
 {
-    xcb_pixmap_t pixmap = xcb_generate_id(xcbConnection());
-    xcb_create_pixmap(xcbConnection(), 32, pixmap, x11RootWindow(), FPS_WIDTH, MAX_TIME);
-    XRenderPicture p(pixmap, 32);
-    xcb_free_pixmap(xcbConnection(), pixmap);
-    xcb_render_color_t col;
-    col.alpha = int(alpha * 0xffff);
-    col.red = int(alpha * 0xffff);   // white
-    col.green = int(alpha * 0xffff);
-    col.blue = int(alpha * 0xffff);
-    xcb_rectangle_t rect = {0, 0, FPS_WIDTH, MAX_TIME};
-    xcb_render_fill_rectangles(xcbConnection(), XCB_RENDER_PICT_OP_SRC, p, col, 1, &rect);
-    col.red = 0; // blue
-    col.green = 0;
-    col.blue = int(alpha * 0xffff);
-    rect.y = MAX_TIME - fps;
-    rect.width = FPS_WIDTH;
-    rect.height = fps;
-    xcb_render_fill_rectangles(xcbConnection(), XCB_RENDER_PICT_OP_SRC, p, col, 1, &rect);
-    col.red = 0; // black
-    col.green = 0;
-    col.blue = 0;
-    QVector<xcb_rectangle_t> rects;
-    for (int i = 10;
-            i < MAX_TIME;
-            i += 10) {
-        xcb_rectangle_t rect = {0, int16_t(MAX_TIME - i), uint16_t(FPS_WIDTH), 1};
-        rects << rect;
+    if (m_showGraph) {
+        xcb_pixmap_t pixmap = xcb_generate_id(xcbConnection());
+        xcb_create_pixmap(xcbConnection(), 32, pixmap, x11RootWindow(), FPS_WIDTH, MAX_TIME);
+        XRenderPicture p(pixmap, 32);
+        xcb_free_pixmap(xcbConnection(), pixmap);
+        xcb_render_color_t col;
+        col.alpha = int(alpha * 0xffff);
+        col.red = int(alpha * 0xffff);   // white
+        col.green = int(alpha * 0xffff);
+        col.blue = int(alpha * 0xffff);
+        xcb_rectangle_t rect = {0, 0, FPS_WIDTH, MAX_TIME};
+        xcb_render_fill_rectangles(xcbConnection(), XCB_RENDER_PICT_OP_SRC, p, col, 1, &rect);
+        col.red = 0; // blue
+        col.green = 0;
+        col.blue = int(alpha * 0xffff);
+        rect.y = MAX_TIME - fps;
+        rect.width = FPS_WIDTH;
+        rect.height = fps;
+        xcb_render_fill_rectangles(xcbConnection(), XCB_RENDER_PICT_OP_SRC, p, col, 1, &rect);
+        col.red = 0; // black
+        col.green = 0;
+        col.blue = 0;
+        QVector<xcb_rectangle_t> rects;
+        for (int i = 10;
+                i < MAX_TIME;
+                i += 10) {
+            xcb_rectangle_t rect = {0, int16_t(MAX_TIME - i), uint16_t(FPS_WIDTH), 1};
+            rects << rect;
+        }
+        xcb_render_fill_rectangles(xcbConnection(), XCB_RENDER_PICT_OP_SRC, p, col, rects.count(), rects.constData());
+        xcb_render_composite(xcbConnection(), alpha != 1.0 ? XCB_RENDER_PICT_OP_OVER : XCB_RENDER_PICT_OP_SRC, p, XCB_RENDER_PICTURE_NONE,
+                            effects->xrenderBufferPicture(), 0, 0, 0, 0, x, y, FPS_WIDTH, MAX_TIME);
+
+
+        // Paint FPS graph
+        paintFPSGraph(x + FPS_WIDTH, y);
+
+        // Paint amount of rendered pixels graph
+        paintDrawSizeGraph(x + FPS_WIDTH + MAX_TIME, y);
     }
-    xcb_render_fill_rectangles(xcbConnection(), XCB_RENDER_PICT_OP_SRC, p, col, rects.count(), rects.constData());
-    xcb_render_composite(xcbConnection(), alpha != 1.0 ? XCB_RENDER_PICT_OP_OVER : XCB_RENDER_PICT_OP_SRC, p, XCB_RENDER_PICTURE_NONE,
-                         effects->xrenderBufferPicture(), 0, 0, 0, 0, x, y, FPS_WIDTH, MAX_TIME);
-
-
-    // Paint FPS graph
-    paintFPSGraph(x + FPS_WIDTH, y);
-
-    // Paint amount of rendered pixels graph
-    paintDrawSizeGraph(x + FPS_WIDTH + MAX_TIME, y);
-
     // Paint FPS numerical value
     if (fpsTextRect.isValid()) {
         QImage textImg(fpsTextImage(fps));
@@ -308,27 +333,28 @@ void ShowFpsEffect::paintQPainter(int fps)
     QPainter *painter = effects->scenePainter();
     painter->save();
 
-    QColor color(255, 255, 255);
-    color.setAlphaF(alpha);
+    if (m_showGraph) {
+        QColor color(255, 255, 255);
+        color.setAlphaF(alpha);
 
-    painter->setCompositionMode(QPainter::CompositionMode_SourceOver);
-    painter->fillRect(x, y, 2 * NUM_PAINTS + FPS_WIDTH, MAX_TIME, color);
-    color.setRed(0);
-    color.setGreen(0);
-    painter->fillRect(x, y + MAX_TIME - fps, FPS_WIDTH, fps, color);
+        painter->setCompositionMode(QPainter::CompositionMode_SourceOver);
+        painter->fillRect(x, y, 2 * NUM_PAINTS + FPS_WIDTH, MAX_TIME, color);
+        color.setRed(0);
+        color.setGreen(0);
+        painter->fillRect(x, y + MAX_TIME - fps, FPS_WIDTH, fps, color);
 
-    color.setBlue(0);
-    for (int i = 10; i < MAX_TIME; i += 10) {
-        painter->setPen(color);
-        painter->drawLine(x, y + MAX_TIME - i, x + FPS_WIDTH, y + MAX_TIME - i);
+        color.setBlue(0);
+        for (int i = 10; i < MAX_TIME; i += 10) {
+            painter->setPen(color);
+            painter->drawLine(x, y + MAX_TIME - i, x + FPS_WIDTH, y + MAX_TIME - i);
+        }
+
+        // Paint FPS graph
+        paintFPSGraph(x + FPS_WIDTH, y + MAX_TIME - 1);
+
+        // Paint amount of rendered pixels graph
+        paintDrawSizeGraph(x + FPS_WIDTH + NUM_PAINTS, y + MAX_TIME - 1);
     }
-
-    // Paint FPS graph
-    paintFPSGraph(x + FPS_WIDTH, y + MAX_TIME - 1);
-
-    // Paint amount of rendered pixels graph
-    paintDrawSizeGraph(x + FPS_WIDTH + NUM_PAINTS, y + MAX_TIME - 1);
-
     // Paint FPS numerical value
     painter->setPen(Qt::black);
     painter->drawText(fpsTextRect, textAlign, QString::number(fps));
@@ -531,7 +557,25 @@ QImage ShowFpsEffect::fpsTextImage(int fps)
     im.fill(Qt::transparent);
     QPainter painter(&im);
     painter.setFont(textFont);
-    painter.setPen(textColor);
+    QColor col = textColor;
+    if (detectedMaxFps > 0) {
+        fps = std::min(fps, qRound(detectedMaxFps));
+    }
+    if (fps > maxFpsSoFar) {
+        maxFpsSoFar = fps; // keep track of highest fps so far
+    }
+    if (m_colorizeText) {
+        if (fps >= maxFpsSoFar / 2) {
+            col = QColor(0, 255, 0); // green
+        } else if (fps >= maxFpsSoFar / 3) {
+            col = QColor(255, 255, 0); // yellow
+        } else if (fps >= maxFpsSoFar / 4) {
+            col = QColor(255, 0, 0); // red
+        } else {
+            col = QColor(0, 0, 0); // black
+        }
+    }
+    painter.setPen(col);
     painter.drawText(QRect(0, 0, 100, 100), textAlign, QString::number(fps));
     painter.end();
     return im;

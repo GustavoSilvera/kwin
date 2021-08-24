@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>356</width>
-    <height>180</height>
+    <height>250</height>
    </rect>
   </property>
   <layout class="QVBoxLayout">
@@ -71,6 +71,26 @@
        </widget>
       </item>
       <item row="1" column="0">
+       <widget class="QLabel" name="label">
+        <property name="text">
+         <string>Draw screen:</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+        </property>
+        <property name="buddy">
+         <cstring>kcfg_ForcePrimaryScreen</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+        <widget class="QCheckBox" name="kcfg_ForcePrimaryScreen">
+        <property name="text">
+            <string>Primary</string>
+        </property>
+        </widget>
+      </item>
+      <item row="2" column="0">
        <widget class="QLabel" name="label_2">
         <property name="text">
          <string>Text font:</string>
@@ -80,7 +100,7 @@
         </property>
        </widget>
       </item>
-      <item row="1" column="1">
+      <item row="2" column="1">
        <widget class="KFontRequester" name="kcfg_TextFont">
         <property name="sizePolicy">
          <sizepolicy hsizetype="Expanding" vsizetype="Preferred">
@@ -90,7 +110,7 @@
         </property>
        </widget>
       </item>
-      <item row="2" column="0">
+      <item row="3" column="0">
        <widget class="QLabel" name="label_3">
         <property name="text">
          <string>Text color:</string>
@@ -103,7 +123,7 @@
         </property>
        </widget>
       </item>
-      <item row="2" column="1">
+      <item row="3" column="1">
        <widget class="KColorButton" name="kcfg_TextColor">
         <property name="sizePolicy">
          <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
@@ -113,7 +133,7 @@
         </property>
        </widget>
       </item>
-      <item row="3" column="0">
+      <item row="5" column="0">
        <widget class="QLabel" name="label_4">
         <property name="text">
          <string>Text alpha:</string>
@@ -126,7 +146,7 @@
         </property>
        </widget>
       </item>
-      <item row="3" column="1">
+      <item row="5" column="1">
        <widget class="QDoubleSpinBox" name="kcfg_TextAlpha">
         <property name="sizePolicy">
          <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
@@ -147,6 +167,66 @@
          <double>1.000000000000000</double>
         </property>
        </widget>
+      </item>
+      <item row="6" column="0">
+       <widget class="QLabel" name="label_4">
+        <property name="text">
+         <string>Show graph:</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+        </property>
+        <property name="buddy">
+         <cstring>kcfg_ShowGraph</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="6" column="1">
+        <widget class="QCheckBox" name="kcfg_ShowGraph">
+        <property name="text">
+            <string>Show frametime graph</string>
+        </property>
+        </widget>
+      </item>
+      <item row="7" column="0">
+       <widget class="QLabel" name="label_4">
+        <property name="text">
+         <string>Show Message:</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+        </property>
+        <property name="buddy">
+         <cstring>kcfg_ShowNoBenchmark</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="7" column="1">
+        <widget class="QCheckBox" name="kcfg_ShowNoBenchmark">
+        <property name="text">
+            <string>Show "not a benchmark" message</string>
+        </property>
+        </widget>
+      </item>
+      <item row="8" column="0">
+       <widget class="QLabel" name="label_4">
+        <property name="text">
+         <string>Colorize Text:</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+        </property>
+        <property name="buddy">
+         <cstring>kcfg_ColorizeText</cstring>
+        </property>
+       </widget>
+      </item>
+      <item row="8" column="1">
+        <widget class="QCheckBox" name="kcfg_ColorizeText">
+        <property name="text">
+            <string>Color text by value (green > yellow > red)</string>
+        </property>
+        </widget>
       </item>
      </layout>
     </widget>
